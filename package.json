@@ -23,9 +23,7 @@
     "test:watch": "npm test -- --watch",
     "benchmark": "node benchmark/runner.js",
     "benchmark:all": "node benchmark/runner.js --all",
-    "benchmark:compare": "node benchmark/compare.js",
     "benchmark:browser": "node benchmark/server.js",
-    "benchmark:wasm": "npm run benchmark:browser",
     "lint": "eslint src test benchmark",
     "prepare": "npm run build"
   },

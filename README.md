@@ -102,6 +102,25 @@ L2 normalize embeddings.
 - **[ColBERT](https://github.com/stanford-futuredata/ColBERT)** - Late interaction retrieval model
 - **[sentence-transformers](https://github.com/UKPLab/sentence-transformers)** - Sentence embedding models
 
+## Benchmarking
+
+Test performance across different implementations:
+
+### Browser (WASM + JS)
+```bash
+npm run benchmark:browser
+# Open http://localhost:8080/
+```
+**Results:** WASM achieves ~11x speedup (21,218 docs/s vs 1,871 baseline)
+
+### Node.js (JS only)
+```bash
+npm run benchmark small
+```
+**Note:** WASM only works in browsers. Node.js benchmarks test JavaScript implementations only.
+
+See [benchmark/README.md](benchmark/README.md) for details.
+
 ## License
 
 MIT - Inspired by [mixedbread-ai/maxsim-cpu](https://github.com/mixedbread-ai/maxsim-cpu)
