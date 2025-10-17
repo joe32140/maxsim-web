@@ -1,0 +1,65 @@
+{
+  "name": "maxsim-cpu",
+  "version": "0.1.0",
+  "description": "High-performance MaxSim (Maximum Similarity) scoring for ColBERT and late-interaction retrieval models - CPU optimized with WASM and SIMD",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./baseline": "./dist/maxsim-baseline.js",
+    "./optimized": "./dist/maxsim-optimized.js"
+  },
+  "scripts": {
+    "build": "node scripts/build.js",
+    "build:wasm": "cd src/rust && wasm-pack build --target web --out-dir ../../dist/wasm",
+    "dev": "node scripts/dev.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:watch": "npm test -- --watch",
+    "benchmark": "node benchmark/runner.js",
+    "benchmark:all": "node benchmark/runner.js --all",
+    "benchmark:compare": "node benchmark/compare.js",
+    "lint": "eslint src test benchmark",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "maxsim",
+    "colbert",
+    "retrieval",
+    "similarity",
+    "embedding",
+    "wasm",
+    "simd",
+    "performance",
+    "late-interaction",
+    "semantic-search"
+  ],
+  "author": "Joe (inspired by mixedbread-ai/maxsim-cpu)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/maxsim-cpu.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/maxsim-cpu/issues"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.2.5"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

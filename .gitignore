@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+coverage/
+.vscode/
+.idea/
+benchmark/results/*.json
+benchmark/results/*.png
+!benchmark/results/.gitkeep
+src/rust/target/
+src/rust/Cargo.lock
+pkg/
+*.wasm
+.env
