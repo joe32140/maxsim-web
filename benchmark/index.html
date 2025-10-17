@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MaxSim WASM Benchmark</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .status.info {
+            background: #e3f2fd;
+            color: #1976d2;
+            border: 1px solid #90caf9;
+        }
+
+        .status.success {
+            background: #e8f5e9;
+            color: #388e3c;
+            border: 1px solid #81c784;
+        }
+
+        .status.warning {
+            background: #fff3e0;
+            color: #f57c00;
+            border: 1px solid #ffb74d;
+        }
+
+        .status.error {
+            background: #ffebee;
+            color: #d32f2f;
+            border: 1px solid #e57373;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        select, input[type="number"] {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        select:focus, input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        button {
+            flex: 1;
+            padding: 15px 30px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        button.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        button.primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button.secondary {
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        button.secondary:hover:not(:disabled) {
+            background: #e0e0e0;
+        }
+
+        .progress {
+            background: #f5f5f5;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .progress.active {
+            display: block;
+        }
+
+        .progress-bar {
+            background: #e0e0e0;
+            height: 30px;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-fill {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        .progress-text {
+            text-align: center;
+            color: #666;
+        }
+
+        .results {
+            margin-top: 30px;
+        }
+
+        .results h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        th {
+            background: #f5f5f5;
+            font-weight: 600;
+            color: #333;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 0.5px;
+        }
+
+        tr:hover {
+            background: #fafafa;
+        }
+
+        .speedup {
+            font-weight: 600;
+            padding: 5px 10px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        .speedup.fast {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+
+        .speedup.slow {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+
+        .chart {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 8px;
+        }
+
+        .bar-chart {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .bar-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .bar-label {
+            min-width: 150px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .bar-container {
+            flex: 1;
+            background: white;
+            border-radius: 4px;
+            height: 40px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            color: white;
+            font-weight: 600;
+            transition: width 1s ease-out;
+        }
+
+        .log {
+            background: #f5f5f5;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .timestamp {
+            color: #999;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 MaxSim WASM Benchmark</h1>
+            <p>High-Performance Browser-Based Benchmarking</p>
+        </header>
+
+        <div class="content">
+            <div id="status" class="status info">
+                Initializing benchmark suite...
+            </div>
+
+            <div class="controls">
+                <div class="control-group">
+                    <label for="scenario">Scenario</label>
+                    <select id="scenario">
+                        <option value="tiny">Tiny (10 docs × 64 tokens)</option>
+                        <option value="small" selected>Small (10 docs × 256 tokens)</option>
+                        <option value="medium">Medium (100 docs × 256 tokens)</option>
+                        <option value="large">Large (100 docs × 512 tokens)</option>
+                        <option value="realistic">Realistic (100 docs × 2000 tokens)</option>
+                        <option value="xl">XL (1000 docs × 512 tokens)</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label for="warmup">Warmup Iterations</label>
+                    <input type="number" id="warmup" value="10" min="0" max="100">
+                </div>
+
+                <div class="control-group">
+                    <label for="iterations">Benchmark Iterations</label>
+                    <input type="number" id="iterations" value="100" min="10" max="1000">
+                </div>
+            </div>
+
+            <div class="buttons">
+                <button id="runBtn" class="primary">Run Benchmark</button>
+                <button id="runAllBtn" class="secondary">Run All Scenarios</button>
+                <button id="exportBtn" class="secondary" disabled>Export Results</button>
+            </div>
+
+            <div id="progress" class="progress">
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill">0%</div>
+                </div>
+                <div id="progressText" class="progress-text">Preparing...</div>
+            </div>
+
+            <div id="results" class="results" style="display: none;">
+                <h2>Benchmark Results</h2>
+                <div id="resultsContent"></div>
+            </div>
+
+            <div id="log" class="log" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { MaxSimWasm } from '../src/js/maxsim-wasm.js';
+        import { MaxSimWasmThreaded } from '../src/js/maxsim-wasm-threaded.js';
+        import { MaxSimBaseline } from '../src/js/maxsim-baseline.js';
+        import { MaxSimOptimized } from '../src/js/maxsim-optimized.js';
+        import { MaxSimTyped } from '../src/js/maxsim-typed.js';
+        import { scenarios, generateFixtures, calculateOperations } from '/benchmark/fixtures.js';
+
+        // UI Elements
+        const statusEl = document.getElementById('status');
+        const runBtn = document.getElementById('runBtn');
+        const runAllBtn = document.getElementById('runAllBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        const progressEl = document.getElementById('progress');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const resultsEl = document.getElementById('results');
+        const resultsContent = document.getElementById('resultsContent');
+        const logEl = document.getElementById('log');
+
+        let benchmarkResults = [];
+        let isRunning = false;
+
+        // Logging
+        function log(message, level = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span class="timestamp">${timestamp}</span>${message}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+            logEl.style.display = 'block';
+            console.log(message);
+        }
+
+        function setStatus(message, type = 'info') {
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+
+        function setProgress(percent, text) {
+            progressFill.style.width = `${percent}%`;
+            progressFill.textContent = `${percent}%`;
+            progressText.textContent = text;
+        }
+
+        // Statistical helpers
+        function mean(arr) {
+            return arr.reduce((sum, v) => sum + v, 0) / arr.length;
+        }
+
+        function median(arr) {
+            const sorted = [...arr].sort((a, b) => a - b);
+            const mid = Math.floor(sorted.length / 2);
+            return sorted.length % 2 === 0
+                ? (sorted[mid - 1] + sorted[mid]) / 2
+                : sorted[mid];
+        }
+
+        function percentile(arr, p) {
+            const sorted = [...arr].sort((a, b) => a - b);
+            const idx = Math.ceil((p / 100) * sorted.length) - 1;
+            return sorted[Math.max(0, idx)];
+        }
+
+        function stdDev(arr) {
+            const avg = mean(arr);
+            const squareDiffs = arr.map(v => Math.pow(v - avg, 2));
+            return Math.sqrt(mean(squareDiffs));
+        }
+
+        // Benchmark implementation
+        async function benchmarkImplementation(name, impl, fixtures, options) {
+            const { warmup = 10, iterations = 100 } = options;
+            const { query, documents } = fixtures;
+
+            log(`Benchmarking ${name}...`);
+
+            // Warmup
+            setProgress(0, `${name}: Warming up...`);
+            for (let i = 0; i < warmup; i++) {
+                // Use zero-allocation method for WASM
+                if (impl.maxsimBatchZeroAlloc) {
+                    impl.maxsimBatchZeroAlloc(query, documents);
+                } else {
+                    impl.maxsimBatch(query, documents);
+                }
+                if (i % 5 === 0) {
+                    setProgress(Math.floor((i / warmup) * 30), `${name}: Warmup ${i}/${warmup}`);
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+            }
+
+            // Benchmark
+            const times = [];
+            for (let i = 0; i < iterations; i++) {
+                const start = performance.now();
+                // Use zero-allocation method for WASM
+                const scores = impl.maxsimBatchZeroAlloc ? 
+                    impl.maxsimBatchZeroAlloc(query, documents) : 
+                    impl.maxsimBatch(query, documents);
+                const end = performance.now();
+                times.push(end - start);
+
+                if (i % 10 === 0) {
+                    const progress = 30 + Math.floor((i / iterations) * 70);
+                    setProgress(progress, `${name}: Iteration ${i}/${iterations}`);
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+            }
+
+            setProgress(100, `${name}: Complete!`);
+
+            const totalTime = times.reduce((sum, t) => sum + t, 0);
+            const throughput = (documents.length * iterations) / totalTime * 1000;
+
+            return {
+                name,
+                mean: mean(times),
+                median: median(times),
+                min: Math.min(...times),
+                max: Math.max(...times),
+                stdDev: stdDev(times),
+                p95: percentile(times, 95),
+                p99: percentile(times, 99),
+                throughput,
+                iterations
+            };
+        }
+
+        // Run single scenario
+        async function runBenchmark(scenarioName, options = {}) {
+            const scenario = scenarios[scenarioName];
+            if (!scenario) {
+                throw new Error(`Unknown scenario: ${scenarioName}`);
+            }
+
+            log(`Starting benchmark: ${scenario.name}`);
+            log(`Query: ${scenario.queryTokens} tokens × ${scenario.dim} dims`);
+            log(`Docs: ${scenario.numDocs} docs × ${scenario.docTokens} tokens`);
+
+            setStatus(`Running ${scenario.name}...`, 'info');
+            progressEl.classList.add('active');
+
+            // Generate fixtures
+            const fixtures = generateFixtures(scenario);
+
+            const implementations = [
+                { name: 'JS Baseline', impl: new MaxSimBaseline({ normalized: scenario.normalized }) },
+                { name: 'JS Optimized', impl: new MaxSimOptimized({ normalized: scenario.normalized }) },
+                { name: 'JS Typed', impl: new MaxSimTyped({ normalized: scenario.normalized }) }
+            ];
+
+            // Try to add WASM
+            if (await MaxSimWasm.isSupported()) {
+                try {
+                    // Standard WASM with zero-allocation optimizations
+                    const wasmImpl = new MaxSimWasm({ normalized: scenario.normalized });
+                    await wasmImpl.init();
+                    implementations.push({ name: 'WASM SIMD', impl: wasmImpl });
+                    log('✅ WASM SIMD loaded successfully!');
+                    
+                    // Threaded WASM for potentially better CPU utilization
+                    if (await MaxSimWasmThreaded.isSupported()) {
+                        try {
+                            const wasmThreadedImpl = new MaxSimWasmThreaded({ normalized: scenario.normalized });
+                            await wasmThreadedImpl.init();
+                            implementations.push({ name: 'WASM Threaded', impl: wasmThreadedImpl });
+                            log('✅ WASM Threaded loaded successfully!');
+                        } catch (threadErr) {
+                            log(`⚠️ WASM Threaded failed to load: ${threadErr.message}`, 'warning');
+                        }
+                    }
+                } catch (err) {
+                    log(`⚠️ WASM failed to load: ${err.message}`, 'warning');
+                }
+            } else {
+                log('⚠️ WASM SIMD not supported on this browser', 'warning');
+            }
+
+            const results = [];
+
+            for (let i = 0; i < implementations.length; i++) {
+                const { name, impl } = implementations[i];
+                const result = await benchmarkImplementation(name, impl, fixtures, options);
+                results.push(result);
+
+                // Small delay to keep UI responsive
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+
+            progressEl.classList.remove('active');
+
+            // Display results
+            displayResults(scenario, results);
+
+            return { scenario, results };
+        }
+
+        // Display results
+        function displayResults(scenario, results) {
+            const baseline = results[0]; // JS Baseline
+
+            let html = `
+                <h3>${scenario.name} - ${scenario.description}</h3>
+                <p><strong>Total Operations:</strong> ${calculateOperations(scenario).toLocaleString()}</p>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Implementation</th>
+                            <th>Mean (ms)</th>
+                            <th>Median (ms)</th>
+                            <th>P95 (ms)</th>
+                            <th>Throughput (docs/s)</th>
+                            <th>Speedup</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            for (const result of results) {
+                const speedup = baseline.mean / result.mean;
+                const speedupClass = speedup >= 1.0 ? 'fast' : 'slow';
+                const arrow = speedup >= 1.0 ? '⬆️' : '⬇️';
+
+                html += `
+                    <tr>
+                        <td><strong>${result.name}</strong></td>
+                        <td>${result.mean.toFixed(2)}</td>
+                        <td>${result.median.toFixed(2)}</td>
+                        <td>${result.p95.toFixed(2)}</td>
+                        <td>${result.throughput.toFixed(0)}</td>
+                        <td><span class="speedup ${speedupClass}">${speedup.toFixed(2)}x ${arrow}</span></td>
+                    </tr>
+                `;
+            }
+
+            html += `
+                    </tbody>
+                </table>
+
+                <div class="chart">
+                    <h4>Throughput Comparison</h4>
+                    <div class="bar-chart">
+            `;
+
+            const maxThroughput = Math.max(...results.map(r => r.throughput));
+
+            for (const result of results) {
+                const width = (result.throughput / maxThroughput) * 100;
+                html += `
+                    <div class="bar-row">
+                        <div class="bar-label">${result.name}</div>
+                        <div class="bar-container">
+                            <div class="bar-fill" style="width: ${width}%">
+                                ${result.throughput.toFixed(0)} docs/s
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += `
+                    </div>
+                </div>
+            `;
+
+            resultsContent.innerHTML = html;
+            resultsEl.style.display = 'block';
+
+            log(`✅ Benchmark complete! Best: ${results[results.length - 1].name} at ${results[results.length - 1].mean.toFixed(2)}ms`);
+            setStatus(`Benchmark complete! Check results below.`, 'success');
+            exportBtn.disabled = false;
+        }
+
+        // Run all scenarios
+        async function runAllBenchmarks() {
+            isRunning = true;
+            runBtn.disabled = true;
+            runAllBtn.disabled = true;
+            benchmarkResults = [];
+
+            const scenarioNames = Object.keys(scenarios);
+
+            for (const name of scenarioNames) {
+                const result = await runBenchmark(name, {
+                    warmup: parseInt(document.getElementById('warmup').value),
+                    iterations: parseInt(document.getElementById('iterations').value)
+                });
+                benchmarkResults.push(result);
+            }
+
+            isRunning = false;
+            runBtn.disabled = false;
+            runAllBtn.disabled = false;
+
+            setStatus('All benchmarks complete!', 'success');
+        }
+
+        // Export results
+        function exportResults() {
+            const data = {
+                timestamp: new Date().toISOString(),
+                platform: {
+                    userAgent: navigator.userAgent,
+                    cores: navigator.hardwareConcurrency,
+                    memory: navigator.deviceMemory
+                },
+                results: benchmarkResults
+            };
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `maxsim-benchmark-${new Date().toISOString()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            log('📥 Results exported!');
+        }
+
+        // Event listeners
+        runBtn.addEventListener('click', async () => {
+            if (isRunning) return;
+
+            isRunning = true;
+            runBtn.disabled = true;
+            runAllBtn.disabled = true;
+            benchmarkResults = [];
+
+            const scenarioName = document.getElementById('scenario').value;
+            const warmup = parseInt(document.getElementById('warmup').value);
+            const iterations = parseInt(document.getElementById('iterations').value);
+
+            try {
+                const result = await runBenchmark(scenarioName, { warmup, iterations });
+                benchmarkResults.push(result);
+            } catch (err) {
+                setStatus(`Error: ${err.message}`, 'error');
+                log(`❌ Error: ${err.message}`);
+            }
+
+            isRunning = false;
+            runBtn.disabled = false;
+            runAllBtn.disabled = false;
+        });
+
+        runAllBtn.addEventListener('click', async () => {
+            if (isRunning) return;
+            await runAllBenchmarks();
+        });
+
+        exportBtn.addEventListener('click', exportResults);
+
+        // Initialize
+        async function init() {
+            log('🚀 MaxSim Benchmark Suite Initialized');
+
+            if (await MaxSimWasm.isSupported()) {
+                setStatus('✅ WASM SIMD is supported on this browser!', 'success');
+                log('✅ WASM SIMD is supported');
+            } else {
+                setStatus('⚠️ WASM SIMD is not supported. Only JS benchmarks will run.', 'warning');
+                log('⚠️ WASM SIMD not supported');
+            }
+
+            log('Ready to run benchmarks!');
+        }
+
+        init();
+    </script>
+</body>
+</html>

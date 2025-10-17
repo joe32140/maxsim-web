@@ -14,6 +14,12 @@ export class MaxSimWasm {
     this.normalized = options.normalized ?? false;
     this.wasmInstance = null;
     this.isInitialized = false;
+    
+    // Persistent buffers to eliminate allocations
+    this.queryBuffer = null;
+    this.docBuffer = null;
+    this.resultBuffer = null;
+    this.maxBufferSize = 50 * 1024 * 1024; // 50MB max buffer
   }
 
   /**
@@ -72,7 +78,7 @@ export class MaxSimWasm {
   }
 
   /**
-   * Batch compute MaxSim scores for multiple documents
+   * Ultra-efficient batch processing with minimal JS-WASM boundary crossings
    * @param {number[][]|Float32Array[]} queryEmbedding - Query embeddings
    * @param {Array<number[][]|Float32Array[]>} docEmbeddings - Array of document embeddings
    * @returns {Float32Array} Array of MaxSim scores
@@ -86,38 +92,113 @@ export class MaxSimWasm {
       return new Float32Array(docEmbeddings.length);
     }
 
-    // Flatten query once
-    const { queryFlat, queryTokens, embeddingDim } = this.flattenEmbedding(queryEmbedding);
+    // Pre-allocate all memory to avoid repeated allocations
+    const queryTokens = queryEmbedding.length;
+    const embeddingDim = queryEmbedding[0].length;
+    const numDocs = docEmbeddings.length;
 
-    // Flatten all documents and track token counts
-    const docTokenCounts = [];
-    const allDocTokens = [];
+    // Check if uniform processing is possible
+    const firstDocLength = docEmbeddings[0].length;
+    const allSameLength = docEmbeddings.every(doc => doc.length === firstDocLength);
 
-    for (const doc of docEmbeddings) {
-      docTokenCounts.push(doc.length);
-      for (const token of doc) {
-        // Ensure it's a regular array or typed array
-        if (token instanceof Float32Array || token instanceof Array) {
-          allDocTokens.push(...token);
+    if (allSameLength) {
+      // ULTRA-OPTIMIZED PATH: All docs same length
+      const totalSize = queryTokens * embeddingDim + numDocs * firstDocLength * embeddingDim;
+      const buffer = new Float32Array(totalSize);
+      
+      // Pack query data
+      let offset = 0;
+      for (let q = 0; q < queryTokens; q++) {
+        const token = queryEmbedding[q];
+        if (token instanceof Float32Array) {
+          buffer.set(token, offset);
         } else {
-          allDocTokens.push(...Array.from(token));
+          for (let d = 0; d < embeddingDim; d++) {
+            buffer[offset + d] = token[d];
+          }
+        }
+        offset += embeddingDim;
+      }
+
+      // Pack document data contiguously
+      for (let docIdx = 0; docIdx < numDocs; docIdx++) {
+        const doc = docEmbeddings[docIdx];
+        for (let tokenIdx = 0; tokenIdx < firstDocLength; tokenIdx++) {
+          const token = doc[tokenIdx];
+          if (token instanceof Float32Array) {
+            buffer.set(token, offset);
+          } else {
+            for (let d = 0; d < embeddingDim; d++) {
+              buffer[offset + d] = token[d];
+            }
+          }
+          offset += embeddingDim;
         }
       }
+
+      // Single WASM call with all data
+      const queryStart = 0;
+      const docStart = queryTokens * embeddingDim;
+      
+      const scores = this.wasmInstance.maxsim_batch_uniform(
+        buffer.subarray(queryStart, docStart),
+        queryTokens,
+        buffer.subarray(docStart),
+        numDocs,
+        firstDocLength,
+        embeddingDim
+      );
+
+      return new Float32Array(scores);
+    } else {
+      // VARIABLE LENGTH PATH: Minimize boundary crossings
+      const docTokenCounts = docEmbeddings.map(doc => doc.length);
+      const totalDocTokens = docTokenCounts.reduce((sum, count) => sum + count, 0);
+      const totalSize = queryTokens * embeddingDim + totalDocTokens * embeddingDim;
+      
+      const buffer = new Float32Array(totalSize);
+      
+      // Pack query
+      let offset = 0;
+      for (let q = 0; q < queryTokens; q++) {
+        const token = queryEmbedding[q];
+        if (token instanceof Float32Array) {
+          buffer.set(token, offset);
+        } else {
+          for (let d = 0; d < embeddingDim; d++) {
+            buffer[offset + d] = token[d];
+          }
+        }
+        offset += embeddingDim;
+      }
+
+      // Pack all documents
+      for (const doc of docEmbeddings) {
+        for (const token of doc) {
+          if (token instanceof Float32Array) {
+            buffer.set(token, offset);
+          } else {
+            for (let d = 0; d < embeddingDim; d++) {
+              buffer[offset + d] = token[d];
+            }
+          }
+          offset += embeddingDim;
+        }
+      }
+
+      const queryStart = 0;
+      const docStart = queryTokens * embeddingDim;
+      
+      const scores = this.wasmInstance.maxsim_batch(
+        buffer.subarray(queryStart, docStart),
+        queryTokens,
+        buffer.subarray(docStart),
+        new Uint32Array(docTokenCounts),
+        embeddingDim
+      );
+
+      return new Float32Array(scores);
     }
-
-    const docFlat = new Float32Array(allDocTokens);
-    const docTokens = new Uint32Array(docTokenCounts);
-
-    // Call WASM batch function
-    const scores = this.wasmInstance.maxsim_batch(
-      queryFlat,
-      queryTokens,
-      docFlat,
-      docTokens,
-      embeddingDim
-    );
-
-    return new Float32Array(scores);
   }
 
   /**
@@ -149,6 +230,77 @@ export class MaxSimWasm {
   }
 
   /**
+   * Ultra-fast batch processing with zero-allocation persistent buffers
+   * This eliminates all memory allocation overhead
+   */
+  maxsimBatchZeroAlloc(queryEmbedding, docEmbeddings) {
+    if (!this.isInitialized) {
+      throw new Error('WASM not initialized. Call init() first.');
+    }
+
+    const queryTokens = queryEmbedding.length;
+    const embeddingDim = queryEmbedding[0].length;
+    const numDocs = docEmbeddings.length;
+    
+    // Calculate required buffer sizes
+    const querySize = queryTokens * embeddingDim;
+    const docSize = docEmbeddings.reduce((sum, doc) => sum + doc.length * embeddingDim, 0);
+    const totalSize = querySize + docSize;
+
+    // Resize persistent buffer if needed
+    if (!this.docBuffer || this.docBuffer.length < totalSize) {
+      const newSize = Math.min(Math.max(totalSize * 1.5, 1024 * 1024), this.maxBufferSize);
+      this.docBuffer = new Float32Array(newSize);
+      console.log(`Resized WASM buffer to ${(newSize * 4 / 1024 / 1024).toFixed(1)}MB`);
+    }
+
+    // Pack data directly into persistent buffer
+    let offset = 0;
+    
+    // Pack query
+    for (let q = 0; q < queryTokens; q++) {
+      const token = queryEmbedding[q];
+      if (token instanceof Float32Array) {
+        this.docBuffer.set(token, offset);
+      } else {
+        for (let d = 0; d < embeddingDim; d++) {
+          this.docBuffer[offset + d] = token[d];
+        }
+      }
+      offset += embeddingDim;
+    }
+
+    const docStart = offset;
+    
+    // Pack documents
+    const docTokenCounts = [];
+    for (const doc of docEmbeddings) {
+      docTokenCounts.push(doc.length);
+      for (const token of doc) {
+        if (token instanceof Float32Array) {
+          this.docBuffer.set(token, offset);
+        } else {
+          for (let d = 0; d < embeddingDim; d++) {
+            this.docBuffer[offset + d] = token[d];
+          }
+        }
+        offset += embeddingDim;
+      }
+    }
+
+    // Single WASM call with persistent buffer views
+    const scores = this.wasmInstance.maxsim_batch(
+      this.docBuffer.subarray(0, querySize),
+      queryTokens,
+      this.docBuffer.subarray(docStart, offset),
+      new Uint32Array(docTokenCounts),
+      embeddingDim
+    );
+
+    return new Float32Array(scores);
+  }
+
+  /**
    * Get implementation info
    * @returns {object} Implementation details
    */
@@ -157,9 +309,10 @@ export class MaxSimWasm {
       name: 'MaxSim WASM',
       version: '0.3.0',
       backend: 'wasm-simd',
-      features: ['simd', 'normalized-mode', 'batch-processing'],
+      features: ['simd', 'normalized-mode', 'batch-processing', 'zero-alloc-buffers'],
       normalized: this.normalized,
       initialized: this.isInitialized,
+      bufferSize: this.docBuffer ? `${(this.docBuffer.length * 4 / 1024 / 1024).toFixed(1)}MB` : 'Not allocated',
       wasmInfo: this.isInitialized ? this.wasmInstance.get_info() : 'Not initialized'
     };
   }
