@@ -7,6 +7,7 @@
 import { MaxSimBaseline } from '../src/js/maxsim-baseline.js';
 import { MaxSimOptimized } from '../src/js/maxsim-optimized.js';
 import { MaxSimTyped } from '../src/js/maxsim-typed.js';
+import { MaxSimWasm } from '../src/js/maxsim-wasm-node.js'; // Node.js version
 import { generateFixtures, scenarios, calculateOperations } from './fixtures.js';
 import { formatResults, saveResults } from './utils.js';
 
@@ -111,17 +112,39 @@ async function runBenchmark(scenarioName, options = {}) {
   const implementations = [
     {
       name: 'JS Baseline',
-      impl: new MaxSimBaseline({ normalized: scenario.normalized })
+      impl: new MaxSimBaseline({ normalized: scenario.normalized }),
+      needsInit: false
     },
     {
       name: 'JS Optimized',
-      impl: new MaxSimOptimized({ normalized: scenario.normalized })
+      impl: new MaxSimOptimized({ normalized: scenario.normalized }),
+      needsInit: false
     },
     {
       name: 'JS Typed Arrays',
-      impl: new MaxSimTyped({ normalized: scenario.normalized })
+      impl: new MaxSimTyped({ normalized: scenario.normalized }),
+      needsInit: false
     }
   ];
+
+  // Try to add WASM if available
+  if (await MaxSimWasm.isSupported()) {
+    try {
+      const wasmImpl = new MaxSimWasm({ normalized: scenario.normalized });
+      await wasmImpl.init();
+      implementations.push({
+        name: 'WASM SIMD',
+        impl: wasmImpl,
+        needsInit: false
+      });
+      console.log('✅ WASM SIMD backend loaded successfully!\n');
+    } catch (err) {
+      console.warn('⚠️ WASM backend failed to load:', err.message);
+      console.log('Continuing with JS-only benchmarks\n');
+    }
+  } else {
+    console.log('ℹ️ WASM SIMD not supported on this platform\n');
+  }
 
   const results = {};
 
