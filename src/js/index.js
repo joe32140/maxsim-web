@@ -7,6 +7,7 @@
 import { MaxSimBaseline } from './maxsim-baseline.js';
 import { MaxSimOptimized } from './maxsim-optimized.js';
 import { MaxSimTyped } from './maxsim-typed.js';
+import { MaxSimWasm } from './maxsim-wasm.js';
 
 /**
  * Main MaxSim class with auto-backend selection
@@ -27,10 +28,24 @@ export class MaxSim {
     let implementation;
 
     if (backend === 'auto') {
-      // Auto-detect best available
-      // Use js-optimized (typed arrays have conversion overhead)
-      // Future: Will auto-select WASM when available
-      implementation = new MaxSimOptimized({ normalized });
+      // Auto-detect best available backend
+      // Try WASM first, fallback to JS optimized
+      if (await MaxSimWasm.isSupported()) {
+        try {
+          implementation = new MaxSimWasm({ normalized });
+          await implementation.init();
+          console.log('✅ Using WASM backend (10x faster!)');
+        } catch (err) {
+          console.warn('⚠️ WASM failed, falling back to JS:', err.message);
+          implementation = new MaxSimOptimized({ normalized });
+        }
+      } else {
+        console.log('ℹ️ WASM SIMD not supported, using JS optimized backend');
+        implementation = new MaxSimOptimized({ normalized });
+      }
+    } else if (backend === 'wasm') {
+      implementation = new MaxSimWasm({ normalized });
+      await implementation.init();
     } else if (backend === 'js-typed') {
       implementation = new MaxSimTyped({ normalized });
     } else if (backend === 'js-optimized') {
@@ -38,7 +53,7 @@ export class MaxSim {
     } else if (backend === 'js-baseline') {
       implementation = new MaxSimBaseline({ normalized });
     } else {
-      throw new Error(`Unknown backend: ${backend}. Available: 'auto', 'js-typed', 'js-optimized', 'js-baseline'`);
+      throw new Error(`Unknown backend: ${backend}. Available: 'auto', 'wasm', 'js-typed', 'js-optimized', 'js-baseline'`);
     }
 
     // Wrap implementation to provide consistent API
@@ -108,4 +123,5 @@ export class MaxSim {
 // Named exports
 export { MaxSimBaseline } from './maxsim-baseline.js';
 export { MaxSimOptimized } from './maxsim-optimized.js';
-export { MaxSimTyped } from './maxsim-typed.js';
+export { MaxSimTyped} from './maxsim-typed.js';
+export { MaxSimWasm } from './maxsim-wasm.js';

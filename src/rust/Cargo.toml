@@ -1,0 +1,21 @@
+[package]
+name = "maxsim-cpu-wasm"
+version = "0.3.0"
+authors = ["Joe"]
+edition = "2021"
+description = "High-performance MaxSim scoring with WASM and SIMD"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-O4", "--enable-simd"]
