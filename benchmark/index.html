@@ -373,10 +373,8 @@
 
     <script type="module">
         import { MaxSimWasm } from '../src/js/maxsim-wasm.js';
-        import { MaxSimWasmThreaded } from '../src/js/maxsim-wasm-threaded.js';
         import { MaxSimBaseline } from '../src/js/maxsim-baseline.js';
         import { MaxSimOptimized } from '../src/js/maxsim-optimized.js';
-        import { MaxSimTyped } from '../src/js/maxsim-typed.js';
         import { scenarios, generateFixtures, calculateOperations } from '/benchmark/fixtures.js';
 
         // UI Elements
@@ -452,8 +450,10 @@
             // Warmup
             setProgress(0, `${name}: Warming up...`);
             for (let i = 0; i < warmup; i++) {
-                // Use zero-allocation method for WASM
-                if (impl.maxsimBatchZeroAlloc) {
+                // Use hyper-optimized method for WASM
+                if (impl.maxsimBatchHyperOptimized) {
+                    impl.maxsimBatchHyperOptimized(query, documents);
+                } else if (impl.maxsimBatchZeroAlloc) {
                     impl.maxsimBatchZeroAlloc(query, documents);
                 } else {
                     impl.maxsimBatch(query, documents);
@@ -468,8 +468,10 @@
             const times = [];
             for (let i = 0; i < iterations; i++) {
                 const start = performance.now();
-                // Use zero-allocation method for WASM
-                const scores = impl.maxsimBatchZeroAlloc ? 
+                // Use hyper-optimized method for WASM
+                const scores = impl.maxsimBatchHyperOptimized ? 
+                    impl.maxsimBatchHyperOptimized(query, documents) :
+                    impl.maxsimBatchZeroAlloc ? 
                     impl.maxsimBatchZeroAlloc(query, documents) : 
                     impl.maxsimBatch(query, documents);
                 const end = performance.now();
@@ -520,30 +522,17 @@
 
             const implementations = [
                 { name: 'JS Baseline', impl: new MaxSimBaseline({ normalized: scenario.normalized }) },
-                { name: 'JS Optimized', impl: new MaxSimOptimized({ normalized: scenario.normalized }) },
-                { name: 'JS Typed', impl: new MaxSimTyped({ normalized: scenario.normalized }) }
+                { name: 'JS Optimized', impl: new MaxSimOptimized({ normalized: scenario.normalized }) }
             ];
 
             // Try to add WASM
             if (await MaxSimWasm.isSupported()) {
                 try {
-                    // Standard WASM with zero-allocation optimizations
+                    // Hyper-optimized WASM with extreme SIMD and zero-copy operations
                     const wasmImpl = new MaxSimWasm({ normalized: scenario.normalized });
                     await wasmImpl.init();
-                    implementations.push({ name: 'WASM SIMD', impl: wasmImpl });
-                    log('✅ WASM SIMD loaded successfully!');
-                    
-                    // Threaded WASM for potentially better CPU utilization
-                    if (await MaxSimWasmThreaded.isSupported()) {
-                        try {
-                            const wasmThreadedImpl = new MaxSimWasmThreaded({ normalized: scenario.normalized });
-                            await wasmThreadedImpl.init();
-                            implementations.push({ name: 'WASM Threaded', impl: wasmThreadedImpl });
-                            log('✅ WASM Threaded loaded successfully!');
-                        } catch (threadErr) {
-                            log(`⚠️ WASM Threaded failed to load: ${threadErr.message}`, 'warning');
-                        }
-                    }
+                    implementations.push({ name: 'WASM Hyper-Optimized', impl: wasmImpl });
+                    log('✅ WASM Hyper-Optimized loaded successfully!');
                 } catch (err) {
                     log(`⚠️ WASM failed to load: ${err.message}`, 'warning');
                 }

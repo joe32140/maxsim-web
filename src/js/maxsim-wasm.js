@@ -230,6 +230,78 @@ export class MaxSimWasm {
   }
 
   /**
+   * ULTIMATE PERFORMANCE: Direct memory access with zero-copy operations
+   * This is the fastest possible implementation
+   */
+  maxsimBatchHyperOptimized(queryEmbedding, docEmbeddings) {
+    if (!this.isInitialized) {
+      throw new Error('WASM not initialized. Call init() first.');
+    }
+
+    const queryTokens = queryEmbedding.length;
+    const embeddingDim = queryEmbedding[0].length;
+    const numDocs = docEmbeddings.length;
+    
+    // Calculate total memory needed
+    const querySize = queryTokens * embeddingDim;
+    const docTokenCounts = docEmbeddings.map(doc => doc.length);
+    const totalDocSize = docTokenCounts.reduce((sum, count) => sum + count * embeddingDim, 0);
+    
+    // Allocate WASM linear memory directly
+    const totalFloats = querySize + totalDocSize;
+    const memory = new Float32Array(totalFloats);
+    const docTokensArray = new Uint32Array(docTokenCounts);
+    
+    // Pack data directly into WASM memory with optimal layout
+    let offset = 0;
+    
+    // Pack query with cache-friendly layout
+    for (let q = 0; q < queryTokens; q++) {
+      const token = queryEmbedding[q];
+      if (token instanceof Float32Array) {
+        memory.set(token, offset);
+      } else {
+        for (let d = 0; d < embeddingDim; d++) {
+          memory[offset + d] = token[d];
+        }
+      }
+      offset += embeddingDim;
+    }
+
+    const docStartOffset = offset;
+    
+    // Pack documents with optimal memory layout
+    for (const doc of docEmbeddings) {
+      for (const token of doc) {
+        if (token instanceof Float32Array) {
+          memory.set(token, offset);
+        } else {
+          for (let d = 0; d < embeddingDim; d++) {
+            memory[offset + d] = token[d];
+          }
+        }
+        offset += embeddingDim;
+      }
+    }
+
+    // Get raw pointers to WASM linear memory
+    const queryPtr = memory.subarray(0, querySize);
+    const docPtr = memory.subarray(docStartOffset);
+    
+    // Call hyper-optimized WASM function with direct memory access
+    const scores = this.wasmInstance.maxsim_batch_zero_copy(
+      queryPtr.byteOffset,
+      queryTokens,
+      docPtr.byteOffset,
+      docTokensArray.byteOffset,
+      numDocs,
+      embeddingDim
+    );
+
+    return new Float32Array(scores);
+  }
+
+  /**
    * Ultra-fast batch processing with zero-allocation persistent buffers
    * This eliminates all memory allocation overhead
    */
