@@ -6,6 +6,7 @@
 
 import { MaxSimBaseline } from './maxsim-baseline.js';
 import { MaxSimOptimized } from './maxsim-optimized.js';
+import { MaxSimTyped } from './maxsim-typed.js';
 
 /**
  * Main MaxSim class with auto-backend selection
@@ -26,17 +27,18 @@ export class MaxSim {
     let implementation;
 
     if (backend === 'auto') {
-      // Auto-detect best available (currently just optimized vs baseline)
-      // Future: Will detect WASM+SIMD support
-      implementation = normalized
-        ? new MaxSimOptimized({ normalized: true })
-        : new MaxSimOptimized({ normalized: false });
+      // Auto-detect best available
+      // Use js-optimized (typed arrays have conversion overhead)
+      // Future: Will auto-select WASM when available
+      implementation = new MaxSimOptimized({ normalized });
+    } else if (backend === 'js-typed') {
+      implementation = new MaxSimTyped({ normalized });
     } else if (backend === 'js-optimized') {
       implementation = new MaxSimOptimized({ normalized });
     } else if (backend === 'js-baseline') {
       implementation = new MaxSimBaseline({ normalized });
     } else {
-      throw new Error(`Unknown backend: ${backend}. Available: 'auto', 'js-optimized', 'js-baseline'`);
+      throw new Error(`Unknown backend: ${backend}. Available: 'auto', 'js-typed', 'js-optimized', 'js-baseline'`);
     }
 
     // Wrap implementation to provide consistent API
@@ -86,11 +88,12 @@ export class MaxSim {
 
   /**
    * Normalize embeddings (L2 normalization)
+   * Returns typed arrays for best performance
    * @param {number[][]} embedding - Embeddings to normalize
-   * @returns {number[][]} Normalized embeddings
+   * @returns {Float32Array[]} Normalized embeddings
    */
   static normalize(embedding) {
-    return MaxSimOptimized.normalize(embedding);
+    return MaxSimTyped.normalize(embedding);
   }
 
   /**
@@ -105,3 +108,4 @@ export class MaxSim {
 // Named exports
 export { MaxSimBaseline } from './maxsim-baseline.js';
 export { MaxSimOptimized } from './maxsim-optimized.js';
+export { MaxSimTyped } from './maxsim-typed.js';

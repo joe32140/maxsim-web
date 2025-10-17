@@ -4,6 +4,7 @@
 
 import { MaxSimBaseline } from '../../src/js/maxsim-baseline.js';
 import { MaxSimOptimized } from '../../src/js/maxsim-optimized.js';
+import { MaxSimTyped } from '../../src/js/maxsim-typed.js';
 
 describe('MaxSim Implementations', () => {
   // Test data
@@ -20,7 +21,8 @@ describe('MaxSim Implementations', () => {
 
   const implementations = [
     { name: 'Baseline', Class: MaxSimBaseline },
-    { name: 'Optimized', Class: MaxSimOptimized }
+    { name: 'Optimized', Class: MaxSimOptimized },
+    { name: 'Typed', Class: MaxSimTyped }
   ];
 
   for (const { name, Class } of implementations) {
@@ -70,10 +72,12 @@ describe('MaxSim Implementations', () => {
         const normalized = Class.normalize(unnormalized);
 
         // Check magnitude is 1
+        // Note: Float32Array has slightly lower precision than Number
         const mag = Math.sqrt(
           normalized[0].reduce((sum, v) => sum + v * v, 0)
         );
-        expect(mag).toBeCloseTo(1.0, 10);
+        const precision = name === 'Typed' ? 5 : 10; // Typed arrays use Float32
+        expect(mag).toBeCloseTo(1.0, precision);
       });
     });
   }
@@ -97,6 +101,29 @@ describe('MaxSim Implementations', () => {
       const score2 = optimized.maxsim(queryEmbedding, docEmbedding);
 
       expect(score1).toBeCloseTo(score2, 10);
+    });
+
+    test('typed arrays should produce same results as baseline', () => {
+      const baseline = new MaxSimBaseline({ normalized: true });
+      const typed = new MaxSimTyped({ normalized: true });
+
+      const score1 = baseline.maxsim(queryEmbedding, docEmbedding);
+      const score2 = typed.maxsim(queryEmbedding, docEmbedding);
+
+      expect(score1).toBeCloseTo(score2, 5);
+    });
+
+    test('typed arrays should work with Float32Array inputs', () => {
+      const typed = new MaxSimTyped({ normalized: true });
+
+      // Convert to typed arrays
+      const queryTyped = MaxSimTyped.toTypedArray(queryEmbedding);
+      const docTyped = MaxSimTyped.toTypedArray(docEmbedding);
+
+      const score = typed.maxsim(queryTyped, docTyped);
+
+      expect(score).toBeGreaterThan(0);
+      expect(score).toBeLessThanOrEqual(1);
     });
   });
 
