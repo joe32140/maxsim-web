@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MaxSim WASM Benchmark</title>
+    <title>MaxSim CPU.js Benchmark</title>
     <style>
         * {
             margin: 0;
@@ -207,9 +207,15 @@
         }
 
         th, td {
-            padding: 15px;
+            padding: 12px 15px;
             text-align: left;
             border-bottom: 1px solid #e0e0e0;
+            font-size: 14px;
+        }
+
+        td:nth-child(5), th:nth-child(5) {
+            text-align: right;
+            font-family: 'Courier New', monospace;
         }
 
         th {
@@ -259,21 +265,24 @@
             display: flex;
             align-items: center;
             gap: 15px;
+            min-height: 50px;
         }
 
         .bar-label {
-            min-width: 150px;
+            min-width: 180px;
             font-weight: 600;
             color: #333;
+            font-size: 14px;
         }
 
         .bar-container {
             flex: 1;
-            background: white;
-            border-radius: 4px;
+            background: #e0e0e0;
+            border-radius: 6px;
             height: 40px;
             position: relative;
             overflow: hidden;
+            border: 1px solid #ccc;
         }
 
         .bar-fill {
@@ -281,10 +290,14 @@
             background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
             display: flex;
             align-items: center;
+            justify-content: flex-end;
             padding: 0 10px;
             color: white;
             font-weight: 600;
+            font-size: 13px;
             transition: width 1s ease-out;
+            min-width: 60px;
+            white-space: nowrap;
         }
 
         .log {
@@ -316,8 +329,8 @@
 <body>
     <div class="container">
         <header>
-            <h1>🚀 MaxSim WASM Benchmark</h1>
-            <p>High-Performance Browser-Based Benchmarking</p>
+            <h1>🚀 MaxSim CPU.js Benchmark</h1>
+            <p>JavaScript/WASM Performance Testing</p>
         </header>
 
         <div class="content">
@@ -347,11 +360,21 @@
                     <label for="iterations">Benchmark Iterations</label>
                     <input type="number" id="iterations" value="100" min="10" max="1000">
                 </div>
+
+                <div class="control-group">
+                    <label for="embeddingType">Embedding Type</label>
+                    <select id="embeddingType">
+                        <option value="random">Random (Standard)</option>
+                        <option value="realistic">Realistic (ColBERT-like)</option>
+                        <option value="compare">Compare Both</option>
+                    </select>
+                </div>
             </div>
 
             <div class="buttons">
                 <button id="runBtn" class="primary">Run Benchmark</button>
                 <button id="runAllBtn" class="secondary">Run All Scenarios</button>
+                <button id="realismBtn" class="secondary">Test Realism Impact</button>
                 <button id="exportBtn" class="secondary" disabled>Export Results</button>
             </div>
 
@@ -376,11 +399,13 @@
         import { MaxSimBaseline } from '../src/js/maxsim-baseline.js';
         import { MaxSimOptimized } from '../src/js/maxsim-optimized.js';
         import { scenarios, generateFixtures, calculateOperations } from '/benchmark/fixtures.js';
+        import { generateRealisticDataset, compareEmbeddingTypes } from '/benchmark/realistic-embeddings.js';
 
         // UI Elements
         const statusEl = document.getElementById('status');
         const runBtn = document.getElementById('runBtn');
         const runAllBtn = document.getElementById('runAllBtn');
+        const realismBtn = document.getElementById('realismBtn');
         const exportBtn = document.getElementById('exportBtn');
         const progressEl = document.getElementById('progress');
         const progressFill = document.getElementById('progressFill');
@@ -517,8 +542,17 @@
             setStatus(`Running ${scenario.name}...`, 'info');
             progressEl.classList.add('active');
 
-            // Generate fixtures
-            const fixtures = generateFixtures(scenario);
+            // Generate fixtures based on embedding type
+            const embeddingType = document.getElementById('embeddingType').value;
+            let fixtures;
+            
+            if (embeddingType === 'realistic') {
+                log('🧬 Generating realistic ColBERT-like embeddings...');
+                fixtures = generateRealisticDataset(scenario);
+            } else {
+                log('🎲 Generating random embeddings...');
+                fixtures = generateFixtures(scenario);
+            }
 
             const implementations = [
                 { name: 'JS Baseline', impl: new MaxSimBaseline({ normalized: scenario.normalized }) },
@@ -592,7 +626,7 @@
                         <td>${result.mean.toFixed(2)}</td>
                         <td>${result.median.toFixed(2)}</td>
                         <td>${result.p95.toFixed(2)}</td>
-                        <td>${result.throughput.toFixed(0)}</td>
+                        <td>${result.throughput.toLocaleString('en-US', {maximumFractionDigits: 0})}</td>
                         <td><span class="speedup ${speedupClass}">${speedup.toFixed(2)}x ${arrow}</span></td>
                     </tr>
                 `;
@@ -660,6 +694,150 @@
             setStatus('All benchmarks complete!', 'success');
         }
 
+        // Test realism impact
+        async function testRealismImpact() {
+            isRunning = true;
+            runBtn.disabled = true;
+            runAllBtn.disabled = true;
+            realismBtn.disabled = true;
+
+            const scenarioName = document.getElementById('scenario').value;
+            const scenario = scenarios[scenarioName];
+            
+            setStatus('Testing realism impact...', 'info');
+            progressEl.classList.add('active');
+            
+            log('🧪 Starting realism impact test...');
+            log(`Scenario: ${scenario.name}`);
+
+            // Get best available implementation
+            let implementation;
+            if (await MaxSimWasm.isSupported()) {
+                try {
+                    implementation = new MaxSimWasm({ normalized: scenario.normalized });
+                    await implementation.init();
+                    log('✅ Using WASM implementation for realism test');
+                } catch (err) {
+                    implementation = new MaxSimOptimized({ normalized: scenario.normalized });
+                    log('⚠️ WASM failed, using JS Optimized for realism test');
+                }
+            } else {
+                implementation = new MaxSimOptimized({ normalized: scenario.normalized });
+                log('ℹ️ Using JS Optimized for realism test');
+            }
+
+            setProgress(25, 'Generating random embeddings...');
+            
+            // Generate random embeddings
+            const randomFixtures = generateFixtures(scenario);
+            
+            setProgress(50, 'Generating realistic embeddings...');
+            
+            // Generate realistic embeddings
+            const realisticFixtures = generateRealisticDataset(scenario);
+            
+            setProgress(75, 'Running performance comparison...');
+
+            const iterations = 30; // Fewer iterations for comparison
+            
+            // Benchmark random embeddings
+            const randomTimes = [];
+            for (let i = 0; i < iterations; i++) {
+                const start = performance.now();
+                const scores = implementation.maxsimBatchHyperOptimized ? 
+                    implementation.maxsimBatchHyperOptimized(randomFixtures.query, randomFixtures.documents) :
+                    implementation.maxsimBatch(randomFixtures.query, randomFixtures.documents);
+                randomTimes.push(performance.now() - start);
+            }
+
+            // Benchmark realistic embeddings
+            const realisticTimes = [];
+            for (let i = 0; i < iterations; i++) {
+                const start = performance.now();
+                const scores = implementation.maxsimBatchHyperOptimized ? 
+                    implementation.maxsimBatchHyperOptimized(realisticFixtures.query, realisticFixtures.documents) :
+                    implementation.maxsimBatch(realisticFixtures.query, realisticFixtures.documents);
+                realisticTimes.push(performance.now() - start);
+            }
+
+            setProgress(100, 'Analyzing results...');
+
+            const randomMean = mean(randomTimes);
+            const realisticMean = mean(realisticTimes);
+            const difference = ((realisticMean - randomMean) / randomMean * 100);
+
+            // Get score distributions
+            const randomScores = implementation.maxsimBatchHyperOptimized ? 
+                implementation.maxsimBatchHyperOptimized(randomFixtures.query, randomFixtures.documents) :
+                implementation.maxsimBatch(randomFixtures.query, randomFixtures.documents);
+            const realisticScores = implementation.maxsimBatchHyperOptimized ? 
+                implementation.maxsimBatchHyperOptimized(realisticFixtures.query, realisticFixtures.documents) :
+                implementation.maxsimBatch(realisticFixtures.query, realisticFixtures.documents);
+
+            const randomAvg = Array.from(randomScores).reduce((sum, s) => sum + s, 0) / randomScores.length;
+            const realisticAvg = Array.from(realisticScores).reduce((sum, s) => sum + s, 0) / realisticScores.length;
+            const highSimRandom = Array.from(randomScores).filter(s => s > 0.5).length;
+            const highSimRealistic = Array.from(realisticScores).filter(s => s > 0.5).length;
+
+            progressEl.classList.remove('active');
+
+            // Display realism comparison results
+            let html = `
+                <h3>🧬 Realism Impact Analysis - ${scenario.name}</h3>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;">
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
+                        <h4>⚡ Performance Impact</h4>
+                        <p><strong>Random Embeddings:</strong> ${randomMean.toFixed(2)} ms</p>
+                        <p><strong>Realistic Embeddings:</strong> ${realisticMean.toFixed(2)} ms</p>
+                        <p><strong>Difference:</strong> <span style="color: ${difference > 0 ? '#d32f2f' : '#388e3c'};">${difference.toFixed(1)}%</span></p>
+                        <p style="margin-top: 15px; font-size: 0.9em; color: #666;">
+                            ${Math.abs(difference) < 5 ? '✅ Negligible performance difference' : 
+                              difference > 0 ? '⚠️ Realistic embeddings are slower' : '🚀 Realistic embeddings are faster'}
+                        </p>
+                    </div>
+                    
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
+                        <h4>📊 Score Distributions</h4>
+                        <p><strong>Random Avg Score:</strong> ${randomAvg.toFixed(4)}</p>
+                        <p><strong>Realistic Avg Score:</strong> ${realisticAvg.toFixed(4)}</p>
+                        <p><strong>High Similarity Docs:</strong></p>
+                        <p style="margin-left: 20px;">Random: ${highSimRandom}/${scenario.numDocs}</p>
+                        <p style="margin-left: 20px;">Realistic: ${highSimRealistic}/${scenario.numDocs}</p>
+                    </div>
+                </div>
+
+                <div style="background: #e3f2fd; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <h4>🔬 Analysis</h4>
+                    <ul style="margin: 10px 0; padding-left: 20px;">
+                        <li><strong>Performance:</strong> ${Math.abs(difference) < 5 ? 
+                            'Random and realistic embeddings have nearly identical performance, validating benchmark realism.' :
+                            'There is a measurable performance difference, suggesting algorithm sensitivity to data distribution.'}</li>
+                        <li><strong>Score Distribution:</strong> ${highSimRealistic > highSimRandom ? 
+                            'Realistic embeddings produce more high-similarity matches, better simulating real-world retrieval scenarios.' :
+                            'Score distributions are similar, indicating both approaches test the algorithm effectively.'}</li>
+                        <li><strong>Benchmark Validity:</strong> ${Math.abs(difference) < 10 ? 
+                            'Random embeddings are valid for performance benchmarking.' :
+                            'Consider using realistic embeddings for more accurate performance estimates.'}</li>
+                    </ul>
+                </div>
+            `;
+
+            resultsContent.innerHTML = html;
+            resultsEl.style.display = 'block';
+
+            log(`✅ Realism test complete!`);
+            log(`Performance difference: ${difference.toFixed(1)}%`);
+            log(`Random avg score: ${randomAvg.toFixed(4)}, Realistic avg score: ${realisticAvg.toFixed(4)}`);
+            
+            setStatus('Realism impact test complete!', 'success');
+
+            isRunning = false;
+            runBtn.disabled = false;
+            runAllBtn.disabled = false;
+            realismBtn.disabled = false;
+        }
+
         // Export results
         function exportResults() {
             const data = {
@@ -715,6 +893,11 @@
         });
 
         exportBtn.addEventListener('click', exportResults);
+
+        realismBtn.addEventListener('click', async () => {
+            if (isRunning) return;
+            await testRealismImpact();
+        });
 
         // Initialize
         async function init() {

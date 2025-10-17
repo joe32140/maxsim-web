@@ -1,7 +1,7 @@
 {
-  "name": "maxsim-cpu",
+  "name": "maxsim-web",
   "version": "0.1.0",
-  "description": "High-performance MaxSim (Maximum Similarity) scoring for ColBERT and late-interaction retrieval models - CPU optimized with WASM and SIMD",
+  "description": "JavaScript/WASM MaxSim implementation for ColBERT and late-interaction retrieval - Browser and Node.js optimized with WASM+SIMD",
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -12,7 +12,8 @@
       "types": "./dist/index.d.ts"
     },
     "./baseline": "./dist/maxsim-baseline.js",
-    "./optimized": "./dist/maxsim-optimized.js"
+    "./optimized": "./dist/maxsim-optimized.js",
+    "./wasm": "./dist/maxsim-wasm.js"
   },
   "scripts": {
     "build": "node scripts/build.js",
@@ -36,22 +37,27 @@
     "embedding",
     "wasm",
     "simd",
+    "javascript",
+    "browser",
+    "nodejs",
     "performance",
     "late-interaction",
-    "semantic-search"
+    "semantic-search",
+    "vector-search",
+    "information-retrieval"
   ],
   "author": "Joe (inspired by mixedbread-ai/maxsim-cpu)",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/maxsim-cpu.git"
+    "url": "git+https://github.com/yourusername/maxsim-web.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/maxsim-cpu/issues"
+    "url": "https://github.com/yourusername/maxsim-web/issues"
   },
+  "homepage": "https://github.com/yourusername/maxsim-web#readme",
   "files": [
-    "dist",
-    "src",
+    "dist/**/*",
     "README.md",
     "LICENSE"
   ],

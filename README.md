@@ -1,140 +1,107 @@
-# MaxSim CPU
+# maxsim-web
 
-⚡ **High-performance MaxSim (Maximum Similarity) scoring for ColBERT and late-interaction retrieval models**
+⚡ **JavaScript/WASM MaxSim implementation for ColBERT and late-interaction retrieval**
 
-Inspired by [mixedbread-ai/maxsim-cpu](https://github.com/mixedbread-ai/maxsim-cpu), this JavaScript/WASM library brings CPU-optimized MaxSim computation to the browser and Node.js.
+High-performance MaxSim computation optimized for JavaScript environments with progressive enhancement from pure JS to WASM+SIMD. The JavaScript counterpart to [mixedbread-ai/maxsim-cpu](https://github.com/mixedbread-ai/maxsim-cpu).
 
-## 🚀 Features
-
-- **Progressive Enhancement**: Automatically selects the best available backend
-  - Pure JS baseline (works everywhere)
-  - Optimized JS with typed arrays (2-3x faster)
-  - WASM with SIMD (10x faster)
-  - Web Workers for parallelization (30-40x faster)
-- **Zero Dependencies**: Lightweight and fast to install
-- **Browser & Node.js**: Works in both environments
-- **Incremental Benchmarks**: Each optimization is measured and documented
-- **TypeScript Support**: Full type definitions included
-
-## 📦 Installation
+## Installation
 
 ```bash
-npm install maxsim-cpu
+npm install maxsim-web
 ```
 
-## 🔧 Quick Start
+## Quick Start
 
 ```javascript
-import { MaxSim } from 'maxsim-cpu';
+import { MaxSim } from 'maxsim-web';
 
-// Initialize (auto-selects best backend)
-const maxsim = await MaxSim.create({
-  backend: 'auto',        // 'auto', 'wasm', 'wasm-parallel', 'js-optimized', 'js-baseline'
-  normalized: true,       // Set to true if embeddings are pre-normalized
-  workers: 4              // Number of Web Workers (for 'wasm-parallel' backend)
-});
+// Auto-selects best backend (WASM → JS optimized → baseline)
+const maxsim = await MaxSim.create({ normalized: true });
 
 // Single document scoring
 const score = maxsim.maxsim(queryEmbedding, docEmbedding);
 
 // Batch scoring (optimized)
-const scores = maxsim.maxsimBatch(queryEmbedding, [doc1, doc2, ...docN]);
+const scores = maxsim.maxsimBatch(queryEmbedding, [doc1, doc2, doc3]);
 ```
 
-## 📊 Benchmarks
+## Use Cases
 
-All benchmarks run on Chrome 120 (Linux x64) with realistic workloads:
-- **Query**: 32 tokens × 128 dimensions
-- **Documents**: 100 docs × 2000 tokens × 128 dimensions
+**Perfect for:**
+- 🌐 **Browser-based search** - Client-side semantic search
+- 🔌 **Chrome extensions** - Real-time document similarity
+- ⚡ **Node.js APIs** - Fast similarity scoring endpoints  
+- 📱 **Progressive web apps** - Offline-capable search
+- 🎯 **Prototyping** - Quick ColBERT integration testing
 
-| Implementation | Throughput (docs/s) | Speedup | Memory |
-|---------------|---------------------|---------|--------|
-| JS Baseline | 80 | 1.00x | 45 MB |
-| JS Optimized | 160 | 2.00x | 42 MB |
-| WASM (SIMD) | 800 | 10.0x | 39 MB |
-| WASM + Workers | 2900 | 36.5x | 52 MB |
+## Performance
 
-See [benchmark/results/](benchmark/results/) for detailed results.
+Progressive enhancement automatically selects the fastest available backend:
 
-## 🧪 Development
+| Backend | Speed | Compatibility |
+|---------|-------|---------------|
+| WASM+SIMD | ~11x faster* | Modern browsers |
+| JS Optimized | ~1.4x faster | All environments |
+| JS Baseline | 1x | Universal |
 
-```bash
-# Install dependencies
-npm install
+*Actual performance: 21,218 docs/s vs 1,871 docs/s baseline (11.3x speedup)
 
-# Run tests
-npm test
-
-# Run benchmarks
-npm run benchmark
-
-# Build WASM (requires Rust)
-npm run build:wasm
-```
-
-## 📖 API Reference
+## API
 
 ### `MaxSim.create(options)`
-
-Creates a MaxSim instance with the best available backend.
-
-**Options:**
-- `backend`: `'auto'` | `'wasm-parallel'` | `'wasm'` | `'js-optimized'` | `'js-baseline'`
-- `normalized`: `boolean` - Whether embeddings are pre-normalized (default: `false`)
-- `workers`: `number` - Number of Web Workers for parallel processing (default: `navigator.hardwareConcurrency`)
+- `backend`: `'auto'` \| `'wasm'` \| `'js-optimized'` \| `'js-baseline'`
+- `normalized`: `boolean` - Pre-normalized embeddings (default: `false`)
 
 ### `maxsim.maxsim(query, doc)`
-
-Computes MaxSim score between a query and a single document.
-
-**Parameters:**
-- `query`: `number[][]` - Query embeddings (tokens × dimensions)
-- `doc`: `number[][]` - Document embeddings (tokens × dimensions)
-
-**Returns:** `number` - MaxSim score
+Compute MaxSim score between query and document embeddings.
 
 ### `maxsim.maxsimBatch(query, docs)`
-
-Computes MaxSim scores between a query and multiple documents (optimized).
-
-**Parameters:**
-- `query`: `number[][]` - Query embeddings (tokens × dimensions)
-- `docs`: `number[][][]` - Array of document embeddings
-
-**Returns:** `number[]` - Array of MaxSim scores
+Batch compute MaxSim scores (optimized for multiple documents).
 
 ### `MaxSim.normalize(embedding)`
+L2 normalize embeddings.
 
-Static utility to normalize embeddings (L2 normalization).
+## Why maxsim-cpu.js?
 
-**Parameters:**
-- `embedding`: `number[][]` - Embeddings to normalize
+**JavaScript/WASM-optimized** implementation of MaxSim computation, complementing the original [mixedbread-ai/maxsim-cpu](https://github.com/mixedbread-ai/maxsim-cpu):
 
-**Returns:** `number[][]` - Normalized embeddings
+| Feature | maxsim-cpu (Original) | maxsim-cpu.js (This) |
+|---------|----------------------|---------------------|
+| **Target** | General CPU (C++/Python) | JavaScript/WASM |
+| **Environment** | Server-side | Browser + Node.js |
+| **Performance** | Native CPU optimization | WASM+SIMD (11x faster) |
+| **Use Case** | Production backends | Web apps, extensions |
+| **Dependencies** | System libraries | Zero dependencies |
 
-## 🤝 Contributing
+## Features
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+- **Zero dependencies** - Lightweight and fast to install
+- **Universal compatibility** - Browser and Node.js
+- **Progressive enhancement** - Automatically uses fastest available backend
+- **TypeScript support** - Full type definitions included
+- **Web-optimized** - Built specifically for JavaScript environments
 
-## 📄 License
+## When to Use
 
-MIT License - see [LICENSE](LICENSE) for details.
+**Use maxsim-cpu.js when:**
+- Building web applications or browser extensions
+- Need client-side MaxSim computation
+- Want zero-dependency JavaScript solution
+- Targeting Node.js environments
+- Building real-time search interfaces
 
-## 🙏 Acknowledgments
+**Use [maxsim-cpu](https://github.com/mixedbread-ai/maxsim-cpu) when:**
+- Building production backends
+- Need maximum CPU performance
+- Have access to native libraries
+- Running on dedicated servers
 
-- Inspired by [mixedbread-ai/maxsim-cpu](https://github.com/mixedbread-ai/maxsim-cpu)
-- Built for the [personal-knowledge](https://github.com/yourusername/personal-knowledge) Chrome extension
-- Thanks to the ColBERT and late-interaction retrieval community
+## Related Projects
 
-## 📚 Citation
+- **[mixedbread-ai/maxsim-cpu](https://github.com/mixedbread-ai/maxsim-cpu)** - Original high-performance CPU implementation
+- **[ColBERT](https://github.com/stanford-futuredata/ColBERT)** - Late interaction retrieval model
+- **[sentence-transformers](https://github.com/UKPLab/sentence-transformers)** - Sentence embedding models
 
-If you use this library in research, please cite:
+## License
 
-```bibtex
-@software{maxsim_cpu_js,
-  title = {MaxSim CPU: High-performance MaxSim scoring for JavaScript},
-  author = {Joe},
-  year = {2025},
-  url = {https://github.com/yourusername/maxsim-cpu}
-}
-```
+MIT - Inspired by [mixedbread-ai/maxsim-cpu](https://github.com/mixedbread-ai/maxsim-cpu)

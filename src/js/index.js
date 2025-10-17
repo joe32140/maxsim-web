@@ -6,7 +6,7 @@
 
 import { MaxSimBaseline } from './maxsim-baseline.js';
 import { MaxSimOptimized } from './maxsim-optimized.js';
-import { MaxSimTyped } from './maxsim-typed.js';
+
 import { MaxSimWasm } from './maxsim-wasm.js';
 
 /**
@@ -46,14 +46,12 @@ export class MaxSim {
     } else if (backend === 'wasm') {
       implementation = new MaxSimWasm({ normalized });
       await implementation.init();
-    } else if (backend === 'js-typed') {
-      implementation = new MaxSimTyped({ normalized });
     } else if (backend === 'js-optimized') {
       implementation = new MaxSimOptimized({ normalized });
     } else if (backend === 'js-baseline') {
       implementation = new MaxSimBaseline({ normalized });
     } else {
-      throw new Error(`Unknown backend: ${backend}. Available: 'auto', 'wasm', 'js-typed', 'js-optimized', 'js-baseline'`);
+      throw new Error(`Unknown backend: ${backend}. Available: 'auto', 'wasm', 'js-optimized', 'js-baseline'`);
     }
 
     // Wrap implementation to provide consistent API
@@ -103,12 +101,11 @@ export class MaxSim {
 
   /**
    * Normalize embeddings (L2 normalization)
-   * Returns typed arrays for best performance
    * @param {number[][]} embedding - Embeddings to normalize
-   * @returns {Float32Array[]} Normalized embeddings
+   * @returns {number[][]} Normalized embeddings
    */
   static normalize(embedding) {
-    return MaxSimTyped.normalize(embedding);
+    return MaxSimOptimized.normalize(embedding);
   }
 
   /**
@@ -123,5 +120,4 @@ export class MaxSim {
 // Named exports
 export { MaxSimBaseline } from './maxsim-baseline.js';
 export { MaxSimOptimized } from './maxsim-optimized.js';
-export { MaxSimTyped} from './maxsim-typed.js';
 export { MaxSimWasm } from './maxsim-wasm.js';
