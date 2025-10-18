@@ -27,7 +27,15 @@ const MIME_TYPES = {
 const PORT = process.env.PORT || 8080;
 
 async function handleRequest(req, res) {
-  let filepath = req.url === '/' ? '/benchmark/index.html' : req.url;
+  // Redirect root to /benchmark/ for consistent path resolution
+  if (req.url === '/') {
+    res.writeHead(302, { 'Location': '/benchmark/' });
+    res.end();
+    console.log(`↪ ${req.method} / → /benchmark/`);
+    return;
+  }
+
+  let filepath = req.url === '/benchmark/' ? '/benchmark/index.html' : req.url;
 
   // Remove query string
   filepath = filepath.split('?')[0];
@@ -85,8 +93,9 @@ server.listen(PORT, () => {
   console.log('');
   console.log('🚀 MaxSim Benchmark Server');
   console.log('━'.repeat(50));
-  console.log(`📊 Benchmark UI:  http://localhost:${PORT}/`);
+  console.log(`📊 Benchmark UI:  http://localhost:${PORT}/benchmark/`);
   console.log(`🌐 Server running on port ${PORT}`);
+  console.log(`💡 Root (/) redirects to /benchmark/`);
   console.log('━'.repeat(50));
   console.log('');
   console.log('Press Ctrl+C to stop');

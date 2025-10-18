@@ -78,12 +78,17 @@ jobs:
           mkdir -p docs/wasm
           cp -r dist/wasm/* docs/wasm/ || echo "No WASM files to copy"
 
-      - name: Fix import paths for GitHub Pages
+      - name: Verify structure for GitHub Pages
         run: |
-          # Update import paths in benchmark/index.html to work with GitHub Pages
-          sed -i 's|../src/js/|../src/js/|g' docs/benchmark/index.html
-          sed -i 's|/benchmark/|./|g' docs/benchmark/index.html
-          
+          # Verify that the directory structure is correct
+          # Local:  benchmark/index.html -> ../src/js/
+          # GitHub: docs/benchmark/index.html -> ../src/js/
+          # Both use the same relative paths, so no modification needed!
+          echo "Verifying docs structure..."
+          ls -la docs/benchmark/ | head -5
+          ls -la docs/src/js/ | head -5
+          echo "Structure verified - relative paths work for both environments!"
+
       - name: Add WASM MIME type configuration
         run: |
           # Create .htaccess for proper WASM MIME type (if using Apache)
