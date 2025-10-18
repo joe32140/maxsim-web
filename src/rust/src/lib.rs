@@ -615,14 +615,24 @@ fn bulk_matrix_multiply(
     embedding_dim: usize,
     normalized: bool,
 ) {
-    // Process in blocks for better cache efficiency
-    const BLOCK_SIZE: usize = 8;
+    // Adaptive cache blocking based on document length (from maxsim-cpu)
+    let d_block_size = match doc_tokens {
+        0..=64 => 16,
+        65..=128 => 16,
+        129..=256 => 12,
+        257..=512 => 8,
+        513..=1024 => 6,
+        1025..=2048 => 4,
+        _ => 4,
+    };
+    
+    let q_block_size = 8;
 
-    for q_block in (0..query_tokens).step_by(BLOCK_SIZE) {
-        let q_end = (q_block + BLOCK_SIZE).min(query_tokens);
+    for q_block in (0..query_tokens).step_by(q_block_size) {
+        let q_end = (q_block + q_block_size).min(query_tokens);
         
-        for d_block in (0..doc_tokens).step_by(BLOCK_SIZE) {
-            let d_end = (d_block + BLOCK_SIZE).min(doc_tokens);
+        for d_block in (0..doc_tokens).step_by(d_block_size) {
+            let d_end = (d_block + d_block_size).min(doc_tokens);
             
             // Process this block of query-doc pairs
             for q_idx in q_block..q_end {
@@ -1078,15 +1088,24 @@ fn hyper_matrix_multiply_generic(
     embedding_dim: usize,
     normalized: bool,
 ) {
-    // Use larger blocks for better cache utilization
-    const Q_BLOCK_SIZE: usize = 8;
-    const D_BLOCK_SIZE: usize = 16;
+    // Adaptive cache blocking based on document length
+    let d_block_size = match doc_tokens {
+        0..=64 => 32,
+        65..=128 => 24,
+        129..=256 => 16,
+        257..=512 => 12,
+        513..=1024 => 8,
+        1025..=2048 => 6,
+        _ => 4,
+    };
+    
+    let q_block_size = 8;
 
-    for q_block in (0..query_tokens).step_by(Q_BLOCK_SIZE) {
-        let q_end = (q_block + Q_BLOCK_SIZE).min(query_tokens);
+    for q_block in (0..query_tokens).step_by(q_block_size) {
+        let q_end = (q_block + q_block_size).min(query_tokens);
         
-        for d_block in (0..doc_tokens).step_by(D_BLOCK_SIZE) {
-            let d_end = (d_block + D_BLOCK_SIZE).min(doc_tokens);
+        for d_block in (0..doc_tokens).step_by(d_block_size) {
+            let d_end = (d_block + d_block_size).min(doc_tokens);
             
             // Process this block with optimized inner loops
             for q_idx in q_block..q_end {

@@ -100,22 +100,31 @@ pub fn maxsim_batch_zero_copy(
 - No serialization/deserialization
 - Single WASM call for entire batch
 
-### 6. **Cache-Optimized Block Processing**
+### 6. **Adaptive Cache Blocking (Inspired by maxsim-cpu)**
 ```rust
-const Q_BLOCK_SIZE: usize = 4;  // Query block size
-const D_BLOCK_SIZE: usize = 8;  // Document block size
+// Adaptive block size based on document length
+let d_block_size = match doc_tokens {
+    0..=64 => 16,      // Small docs: larger blocks
+    65..=128 => 16,
+    129..=256 => 12,
+    257..=512 => 8,
+    513..=1024 => 6,
+    1025..=2048 => 4,  // Large docs: smaller blocks
+    _ => 4,
+};
 
-for q_block in (0..query_tokens).step_by(Q_BLOCK_SIZE) {
-    for d_block in (0..doc_tokens).step_by(D_BLOCK_SIZE) {
-        // Process blocks for optimal cache usage
+for q_block in (0..query_tokens).step_by(q_block_size) {
+    for d_block in (0..doc_tokens).step_by(d_block_size) {
+        // Process blocks with optimal cache usage
     }
 }
 ```
 
-**Impact**: Maximum cache efficiency
-- Blocks sized for L1/L2 cache optimization
-- Minimizes cache misses
-- Better memory access patterns
+**Impact**: Dynamic cache optimization for variable workloads
+- **Adapts to document size** - larger blocks for small docs, smaller for large
+- **Prevents cache thrashing** on long documents
+- **Maximizes cache utilization** on short documents
+- **Inspired by mixedbread-ai/maxsim-cpu** tiling strategy
 
 ## 🧠 Why These Optimizations Work
 
@@ -140,9 +149,14 @@ for q_block in (0..query_tokens).step_by(Q_BLOCK_SIZE) {
 - **Result**: Maximum efficiency for common use cases
 
 ### **5. Cache-Friendly Memory Access**
-- **Before**: Random memory access patterns
-- **After**: Block-based processing with prefetching
-- **Result**: Minimized memory latency
+- **Before**: Fixed block sizes for all workloads
+- **After**: Adaptive blocking based on document length
+- **Result**: Optimal cache utilization across variable workloads
+
+### **6. Learned from Production Systems**
+- **Inspiration**: mixedbread-ai/maxsim-cpu tiling strategy
+- **Adaptation**: Applied to WASM constraints and browser cache hierarchy
+- **Result**: Production-proven optimization patterns
 
 ## 🎯 Performance Analysis
 
