@@ -4,7 +4,6 @@
 
 import { MaxSimBaseline } from '../../src/js/maxsim-baseline.js';
 import { MaxSimOptimized } from '../../src/js/maxsim-optimized.js';
-import { MaxSimTyped } from '../../src/js/maxsim-typed.js';
 
 describe('MaxSim Implementations', () => {
   // Test data
@@ -21,8 +20,7 @@ describe('MaxSim Implementations', () => {
 
   const implementations = [
     { name: 'Baseline', Class: MaxSimBaseline },
-    { name: 'Optimized', Class: MaxSimOptimized },
-    { name: 'Typed', Class: MaxSimTyped }
+    { name: 'Optimized', Class: MaxSimOptimized }
   ];
 
   for (const { name, Class } of implementations) {
@@ -103,28 +101,7 @@ describe('MaxSim Implementations', () => {
       expect(score1).toBeCloseTo(score2, 10);
     });
 
-    test('typed arrays should produce same results as baseline', () => {
-      const baseline = new MaxSimBaseline({ normalized: true });
-      const typed = new MaxSimTyped({ normalized: true });
 
-      const score1 = baseline.maxsim(queryEmbedding, docEmbedding);
-      const score2 = typed.maxsim(queryEmbedding, docEmbedding);
-
-      expect(score1).toBeCloseTo(score2, 5);
-    });
-
-    test('typed arrays should work with Float32Array inputs', () => {
-      const typed = new MaxSimTyped({ normalized: true });
-
-      // Convert to typed arrays
-      const queryTyped = MaxSimTyped.toTypedArray(queryEmbedding);
-      const docTyped = MaxSimTyped.toTypedArray(docEmbedding);
-
-      const score = typed.maxsim(queryTyped, docTyped);
-
-      expect(score).toBeGreaterThan(0);
-      expect(score).toBeLessThanOrEqual(1);
-    });
   });
 
   describe('Edge Cases', () => {

@@ -6,7 +6,6 @@
 
 import { MaxSimBaseline } from '../src/js/maxsim-baseline.js';
 import { MaxSimOptimized } from '../src/js/maxsim-optimized.js';
-import { MaxSimTyped } from '../src/js/maxsim-typed.js';
 import { MaxSimWasm } from '../src/js/maxsim-wasm-node.js'; // Node.js version
 import { generateFixtures, scenarios, calculateOperations } from './fixtures.js';
 import { formatResults, saveResults } from './utils.js';
@@ -118,11 +117,6 @@ async function runBenchmark(scenarioName, options = {}) {
     {
       name: 'JS Optimized',
       impl: new MaxSimOptimized({ normalized: scenario.normalized }),
-      needsInit: false
-    },
-    {
-      name: 'JS Typed Arrays',
-      impl: new MaxSimTyped({ normalized: scenario.normalized }),
       needsInit: false
     }
   ];

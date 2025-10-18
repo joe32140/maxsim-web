@@ -16,7 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0] - 2025-10-17
 
 ### Added
-- Typed arrays implementation (`MaxSimTyped`) with Float32Array
 - Loop unrolling optimizations (8x for dot product, 4x for cosine)
 - Comprehensive Phase 2 findings document ([PHASE2_FINDINGS.md](PHASE2_FINDINGS.md))
 - Additional tests for typed array consistency (25 tests total)
