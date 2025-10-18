@@ -568,11 +568,11 @@
     </div>
 
     <script type="module">
-        import { MaxSimWasm } from '/src/js/maxsim-wasm.js';
-        import { MaxSimBaseline } from '/src/js/maxsim-baseline.js';
-        import { MaxSimOptimized } from '/src/js/maxsim-optimized.js';
-        import { scenarios, generateFixtures, calculateOperations } from '/benchmark/fixtures.js';
-        import { generateRealisticDataset, compareEmbeddingTypes } from '/benchmark/realistic-embeddings.js';
+        import { MaxSimWasm } from '../src/js/maxsim-wasm.js';
+        import { MaxSimBaseline } from '../src/js/maxsim-baseline.js';
+        import { MaxSimOptimized } from '../src/js/maxsim-optimized.js';
+        import { scenarios, generateFixtures, calculateOperations } from './fixtures.js';
+        import { generateRealisticDataset, compareEmbeddingTypes } from './realistic-embeddings.js';
 
         // UI Elements
         const statusEl = document.getElementById('status');
