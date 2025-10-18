@@ -14,7 +14,7 @@ export class MaxSimWasm {
     this.normalized = options.normalized ?? false;
     this.wasmInstance = null;
     this.isInitialized = false;
-    
+
     // Persistent buffers to eliminate allocations
     this.queryBuffer = null;
     this.docBuffer = null;
@@ -23,7 +23,7 @@ export class MaxSimWasm {
   }
 
   /**
-   * Initialize WASM module
+   * Initialize WASM module with retry logic
    * Must be called before using maxsim methods
    */
   async init() {
@@ -31,21 +31,47 @@ export class MaxSimWasm {
       return;
     }
 
-    try {
-      // Dynamic import of WASM module
-      const wasmModule = await import('../../dist/wasm/maxsim_cpu_wasm.js');
+    const maxRetries = 3;
+    const retryDelay = 200; // ms
 
-      // Initialize WASM
-      await wasmModule.default();
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt === 1) {
+          console.log(`🔄 WASM initialization (attempt ${attempt}/${maxRetries})...`);
+        } else {
+          console.log(`🔄 Retrying WASM initialization (attempt ${attempt}/${maxRetries})...`);
+        }
 
-      // Create instance
-      this.wasmInstance = new wasmModule.MaxSimWasm(this.normalized);
-      this.isInitialized = true;
+        // Dynamic import of WASM module
+        const wasmModule = await import('/dist/wasm/maxsim_cpu_wasm.js');
 
-      console.log('✅ WASM MaxSim initialized:', this.wasmInstance.get_info());
-    } catch (error) {
-      console.error('❌ Failed to initialize WASM MaxSim:', error);
-      throw new Error(`WASM initialization failed: ${error.message}`);
+        // Initialize WASM
+        await wasmModule.default();
+
+        // Create instance
+        this.wasmInstance = new wasmModule.MaxSimWasm(this.normalized);
+        this.isInitialized = true;
+
+        // Check SIMD support and log clean status
+        const simdSupported = await MaxSimWasm.isSupported();
+        const info = this.wasmInstance.get_info();
+        console.log(`✅ WASM initialized successfully (SIMD: ${simdSupported ? '✓' : '✗'})`);
+        return;
+      } catch (error) {
+        if (attempt < maxRetries) {
+          console.warn(`⚠️ Attempt ${attempt} failed, retrying...`);
+        } else {
+          console.warn(`⚠️ WASM initialization failed:`, error.message);
+        }
+
+        if (attempt === maxRetries) {
+          console.error('❌ All WASM initialization attempts failed');
+          throw new Error(`WASM initialization failed after ${maxRetries} attempts: ${error.message}`);
+        }
+
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, retryDelay * attempt));
+      }
     }
   }
 
@@ -61,7 +87,7 @@ export class MaxSimWasm {
     }
 
     if (!queryEmbedding || queryEmbedding.length === 0 ||
-        !docEmbedding || docEmbedding.length === 0) {
+      !docEmbedding || docEmbedding.length === 0) {
       return 0;
     }
 
@@ -105,7 +131,7 @@ export class MaxSimWasm {
       // ULTRA-OPTIMIZED PATH: All docs same length
       const totalSize = queryTokens * embeddingDim + numDocs * firstDocLength * embeddingDim;
       const buffer = new Float32Array(totalSize);
-      
+
       // Pack query data
       let offset = 0;
       for (let q = 0; q < queryTokens; q++) {
@@ -139,7 +165,7 @@ export class MaxSimWasm {
       // Single WASM call with all data
       const queryStart = 0;
       const docStart = queryTokens * embeddingDim;
-      
+
       const scores = this.wasmInstance.maxsim_batch_uniform(
         buffer.subarray(queryStart, docStart),
         queryTokens,
@@ -155,9 +181,9 @@ export class MaxSimWasm {
       const docTokenCounts = docEmbeddings.map(doc => doc.length);
       const totalDocTokens = docTokenCounts.reduce((sum, count) => sum + count, 0);
       const totalSize = queryTokens * embeddingDim + totalDocTokens * embeddingDim;
-      
+
       const buffer = new Float32Array(totalSize);
-      
+
       // Pack query
       let offset = 0;
       for (let q = 0; q < queryTokens; q++) {
@@ -188,7 +214,7 @@ export class MaxSimWasm {
 
       const queryStart = 0;
       const docStart = queryTokens * embeddingDim;
-      
+
       const scores = this.wasmInstance.maxsim_batch(
         buffer.subarray(queryStart, docStart),
         queryTokens,
@@ -241,20 +267,20 @@ export class MaxSimWasm {
     const queryTokens = queryEmbedding.length;
     const embeddingDim = queryEmbedding[0].length;
     const numDocs = docEmbeddings.length;
-    
+
     // Calculate total memory needed
     const querySize = queryTokens * embeddingDim;
     const docTokenCounts = docEmbeddings.map(doc => doc.length);
     const totalDocSize = docTokenCounts.reduce((sum, count) => sum + count * embeddingDim, 0);
-    
+
     // Allocate WASM linear memory directly
     const totalFloats = querySize + totalDocSize;
     const memory = new Float32Array(totalFloats);
     const docTokensArray = new Uint32Array(docTokenCounts);
-    
+
     // Pack data directly into WASM memory with optimal layout
     let offset = 0;
-    
+
     // Pack query with cache-friendly layout
     for (let q = 0; q < queryTokens; q++) {
       const token = queryEmbedding[q];
@@ -269,7 +295,7 @@ export class MaxSimWasm {
     }
 
     const docStartOffset = offset;
-    
+
     // Pack documents with optimal memory layout
     for (const doc of docEmbeddings) {
       for (const token of doc) {
@@ -287,7 +313,7 @@ export class MaxSimWasm {
     // Get raw pointers to WASM linear memory
     const queryPtr = memory.subarray(0, querySize);
     const docPtr = memory.subarray(docStartOffset);
-    
+
     // Call hyper-optimized WASM function with direct memory access
     const scores = this.wasmInstance.maxsim_batch_zero_copy(
       queryPtr.byteOffset,
@@ -313,7 +339,7 @@ export class MaxSimWasm {
     const queryTokens = queryEmbedding.length;
     const embeddingDim = queryEmbedding[0].length;
     const numDocs = docEmbeddings.length;
-    
+
     // Calculate required buffer sizes
     const querySize = queryTokens * embeddingDim;
     const docSize = docEmbeddings.reduce((sum, doc) => sum + doc.length * embeddingDim, 0);
@@ -328,7 +354,7 @@ export class MaxSimWasm {
 
     // Pack data directly into persistent buffer
     let offset = 0;
-    
+
     // Pack query
     for (let q = 0; q < queryTokens; q++) {
       const token = queryEmbedding[q];
@@ -343,7 +369,7 @@ export class MaxSimWasm {
     }
 
     const docStart = offset;
-    
+
     // Pack documents
     const docTokenCounts = [];
     for (const doc of docEmbeddings) {

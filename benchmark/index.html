@@ -429,6 +429,23 @@
             console.log(message);
         }
 
+        // Helper function to initialize WASM with better error handling
+        async function initializeWasm(scenario) {
+            if (!await MaxSimWasm.isSupported()) {
+                return null;
+            }
+
+            try {
+                const wasmImpl = new MaxSimWasm({ normalized: scenario.normalized });
+                await wasmImpl.init();
+                log('✅ WASM+SIMD ready');
+                return wasmImpl;
+            } catch (err) {
+                log(`⚠️ WASM+SIMD failed: ${err.message}`);
+                return null;
+            }
+        }
+
         function setStatus(message, type = 'info') {
             statusEl.textContent = message;
             statusEl.className = `status ${type}`;
@@ -559,19 +576,16 @@
                 { name: 'JS Optimized', impl: new MaxSimOptimized({ normalized: scenario.normalized }) }
             ];
 
-            // Try to add WASM
-            if (await MaxSimWasm.isSupported()) {
-                try {
-                    // Hyper-optimized WASM with extreme SIMD and zero-copy operations
-                    const wasmImpl = new MaxSimWasm({ normalized: scenario.normalized });
-                    await wasmImpl.init();
-                    implementations.push({ name: 'WASM Hyper-Optimized', impl: wasmImpl });
-                    log('✅ WASM Hyper-Optimized loaded successfully!');
-                } catch (err) {
-                    log(`⚠️ WASM failed to load: ${err.message}`, 'warning');
-                }
+            // Try to add WASM with improved error handling
+            setStatus('🔄 Loading WASM module...', 'info');
+            const wasmImpl = await initializeWasm(scenario);
+            
+            if (wasmImpl) {
+                implementations.push({ name: 'WASM+SIMD', impl: wasmImpl });
+                setStatus(`Running ${scenario.name}...`, 'info');
             } else {
-                log('⚠️ WASM SIMD not supported on this browser', 'warning');
+                log('⚠️ WASM+SIMD unavailable - JS only');
+                setStatus(`Running ${scenario.name} (JS only)...`, 'warning');
             }
 
             const results = [];
@@ -711,16 +725,11 @@
             log(`Scenario: ${scenario.name}`);
 
             // Get best available implementation
-            let implementation;
-            if (await MaxSimWasm.isSupported()) {
-                try {
-                    implementation = new MaxSimWasm({ normalized: scenario.normalized });
-                    await implementation.init();
-                    log('✅ Using WASM implementation for realism test');
-                } catch (err) {
-                    implementation = new MaxSimOptimized({ normalized: scenario.normalized });
-                    log('⚠️ WASM failed, using JS Optimized for realism test');
-                }
+            setProgress(10, 'Initializing implementation for realism test...');
+            let implementation = await initializeWasm(scenario);
+            
+            if (implementation) {
+                log('✅ Using WASM+SIMD for realism test');
             } else {
                 implementation = new MaxSimOptimized({ normalized: scenario.normalized });
                 log('ℹ️ Using JS Optimized for realism test');
@@ -903,12 +912,24 @@
         async function init() {
             log('🚀 MaxSim Benchmark Suite Initialized');
 
+            // Test WASM support and pre-warm if possible
             if (await MaxSimWasm.isSupported()) {
-                setStatus('✅ WASM SIMD is supported on this browser!', 'success');
-                log('✅ WASM SIMD is supported');
+                setStatus('🔄 Pre-warming WASM+SIMD module...', 'info');
+                log('✅ WASM+SIMD supported - initializing...');
+                
+                // Pre-warm WASM module to avoid first-run failures
+                try {
+                    const testWasm = new MaxSimWasm({ normalized: false });
+                    await testWasm.init();
+                    setStatus('✅ WASM+SIMD ready! (~4x faster vector operations)', 'success');
+                    log('✅ WASM+SIMD pre-warmed and ready');
+                } catch (err) {
+                    setStatus('⚠️ WASM+SIMD supported but pre-warming failed. Will retry during benchmarks.', 'warning');
+                    log(`⚠️ Pre-warming failed: ${err.message}`);
+                }
             } else {
-                setStatus('⚠️ WASM SIMD is not supported. Only JS benchmarks will run.', 'warning');
-                log('⚠️ WASM SIMD not supported');
+                setStatus('⚠️ WASM+SIMD not supported. Using JavaScript only.', 'warning');
+                log('⚠️ WASM+SIMD not available (older browser)');
             }
 
             log('Ready to run benchmarks!');

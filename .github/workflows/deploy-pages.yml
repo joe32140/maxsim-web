@@ -1,0 +1,96 @@
+name: Deploy Benchmark to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build WASM
+        run: npm run build:wasm
+
+      - name: Build project
+        run: npm run build
+
+      - name: Create pages directory structure
+        run: |
+          mkdir -p docs/benchmark
+          mkdir -p docs/src
+          mkdir -p docs/dist
+          
+          # Copy benchmark files
+          cp -r benchmark/* docs/benchmark/
+          
+          # Copy source files
+          cp -r src/* docs/src/
+          
+          # Copy built files
+          cp -r dist/* docs/dist/
+
+      - name: Fix import paths for GitHub Pages
+        run: |
+          # Update import paths in benchmark/index.html to work with GitHub Pages
+          sed -i 's|../src/js/|../src/js/|g' docs/benchmark/index.html
+          sed -i 's|/benchmark/|./|g' docs/benchmark/index.html
+          
+      - name: Add WASM MIME type configuration
+        run: |
+          # Create .htaccess for proper WASM MIME type (if using Apache)
+          echo "AddType application/wasm .wasm" > docs/.htaccess
+          
+          # Create _headers file for Netlify-style hosting (GitHub Pages will ignore this)
+          echo "/*.wasm" > docs/_headers
+          echo "  Content-Type: application/wasm" >> docs/_headers
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './docs'
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

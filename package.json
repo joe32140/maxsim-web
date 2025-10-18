@@ -1,6 +1,6 @@
 {
   "name": "maxsim-web",
-  "version": "0.1.0",
+  "version": "0.1.3",
   "description": "JavaScript/WASM MaxSim implementation for ColBERT and late-interaction retrieval - Browser and Node.js optimized with WASM+SIMD",
   "type": "module",
   "main": "dist/index.js",
@@ -17,15 +17,17 @@
   },
   "scripts": {
     "build": "node scripts/build.js",
-    "build:wasm": "cd src/rust && wasm-pack build --target web --out-dir ../../dist/wasm",
+    "build:wasm": "cd src/rust && wasm-pack build --target web --out-dir ../../dist/wasm && rm -f ../../dist/wasm/.gitignore",
     "dev": "node scripts/dev.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:watch": "npm test -- --watch",
     "benchmark": "node benchmark/runner.js",
     "benchmark:all": "node benchmark/runner.js --all",
     "benchmark:browser": "node benchmark/server.js",
+    "test:pages": "node scripts/test-pages.js",
     "lint": "eslint src test benchmark",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "prepublish": "node scripts/publish.js"
   },
   "keywords": [
     "maxsim",
@@ -44,16 +46,16 @@
     "vector-search",
     "information-retrieval"
   ],
-  "author": "Joe (inspired by mixedbread-ai/maxsim-cpu)",
+  "author": "Joe Hsu (inspired by mixedbread-ai/maxsim-cpu)",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourusername/maxsim-web.git"
+    "url": "git+https://github.com/joe32140/maxsim-web.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/maxsim-web/issues"
+    "url": "https://github.com/joe32140/maxsim-web/issues"
   },
-  "homepage": "https://github.com/yourusername/maxsim-web#readme",
+  "homepage": "https://github.com/joe32140/maxsim-web#readme",
   "files": [
     "dist/**/*",
     "README.md",

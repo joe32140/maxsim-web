@@ -68,6 +68,92 @@ export class MaxSimOptimized {
   }
 
   /**
+   * Ultra-optimized batch processing for small-to-medium workloads
+   * Optimizations:
+   * - Eliminates function call overhead
+   * - Uses typed arrays for better performance
+   * - Unrolled inner loops where beneficial
+   * - Cache-friendly memory access patterns
+   */
+  maxsimBatchOptimized(queryEmbedding, docEmbeddings) {
+    const numDocs = docEmbeddings.length;
+    const numQueryTokens = queryEmbedding.length;
+    const scores = new Float32Array(numDocs);
+
+    // Pre-convert to Float32Arrays for better performance
+    const queryTokens = queryEmbedding.map(token => 
+      token instanceof Float32Array ? token : new Float32Array(token)
+    );
+
+    for (let docIdx = 0; docIdx < numDocs; docIdx++) {
+      const docEmbedding = docEmbeddings[docIdx];
+      const numDocTokens = docEmbedding.length;
+      
+      // Pre-convert doc tokens
+      const docTokens = docEmbedding.map(token => 
+        token instanceof Float32Array ? token : new Float32Array(token)
+      );
+
+      let sumMaxSim = 0;
+
+      // For each query token, find max similarity with doc tokens
+      for (let qIdx = 0; qIdx < numQueryTokens; qIdx++) {
+        const queryToken = queryTokens[qIdx];
+        let maxSim = -Infinity;
+
+        // Optimized inner loop - unrolled dot product
+        for (let dIdx = 0; dIdx < numDocTokens; dIdx++) {
+          const docToken = docTokens[dIdx];
+          
+          // Inline dot product for normalized vectors
+          let dotProduct = 0;
+          const len = queryToken.length;
+          
+          // Unroll loop for common embedding dimensions
+          if (len === 128) {
+            // Unrolled for 128-dim (common ColBERT size)
+            for (let i = 0; i < 128; i += 4) {
+              dotProduct += queryToken[i] * docToken[i] +
+                           queryToken[i + 1] * docToken[i + 1] +
+                           queryToken[i + 2] * docToken[i + 2] +
+                           queryToken[i + 3] * docToken[i + 3];
+            }
+          } else if (len === 256) {
+            // Unrolled for 256-dim
+            for (let i = 0; i < 256; i += 4) {
+              dotProduct += queryToken[i] * docToken[i] +
+                           queryToken[i + 1] * docToken[i + 1] +
+                           queryToken[i + 2] * docToken[i + 2] +
+                           queryToken[i + 3] * docToken[i + 3];
+            }
+          } else {
+            // Generic unrolled loop
+            let i = 0;
+            for (; i < len - 3; i += 4) {
+              dotProduct += queryToken[i] * docToken[i] +
+                           queryToken[i + 1] * docToken[i + 1] +
+                           queryToken[i + 2] * docToken[i + 2] +
+                           queryToken[i + 3] * docToken[i + 3];
+            }
+            // Handle remaining elements
+            for (; i < len; i++) {
+              dotProduct += queryToken[i] * docToken[i];
+            }
+          }
+
+          maxSim = Math.max(maxSim, dotProduct);
+        }
+
+        sumMaxSim += maxSim;
+      }
+
+      scores[docIdx] = sumMaxSim / numQueryTokens;
+    }
+
+    return scores;
+  }
+
+  /**
    * Compute dot product between two vectors (for normalized vectors)
    * This is 2x faster than cosine similarity when vectors are pre-normalized
    * @param {number[]} vec1 - First vector (normalized)
@@ -127,15 +213,32 @@ export class MaxSimOptimized {
   }
 
   /**
+   * Auto-selecting batch method that chooses optimal implementation
+   * based on workload characteristics
+   */
+  maxsimBatchAuto(queryEmbedding, docEmbeddings) {
+    const numDocs = docEmbeddings.length;
+    const avgDocTokens = docEmbeddings.reduce((sum, doc) => sum + doc.length, 0) / numDocs;
+    const totalOperations = queryEmbedding.length * numDocs * avgDocTokens;
+
+    // Use optimized version for small-to-medium workloads
+    if (totalOperations < 100000) {
+      return this.maxsimBatchOptimized(queryEmbedding, docEmbeddings);
+    } else {
+      return this.maxsimBatch(queryEmbedding, docEmbeddings);
+    }
+  }
+
+  /**
    * Get implementation info
    * @returns {object} Implementation details
    */
   getInfo() {
     return {
       name: 'MaxSim Optimized',
-      version: '1.0.0',
+      version: '1.1.0',
       backend: 'js-optimized',
-      features: ['normalized-mode', 'dot-product'],
+      features: ['normalized-mode', 'dot-product', 'auto-selection', 'unrolled-loops', 'typed-arrays'],
       normalized: this.normalized
     };
   }

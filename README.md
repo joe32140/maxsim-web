@@ -34,6 +34,12 @@ const scores = maxsim.maxsimBatch(queryEmbedding, [doc1, doc2, doc3]);
 - 📱 **Progressive web apps** - Offline-capable search
 - 🎯 **Prototyping** - Quick ColBERT integration testing
 
+## 🚀 Live Demo
+
+**[Try the interactive benchmark →](https://joe32140.github.io/maxsim-web/benchmark/)**
+
+Test all implementations in your browser with real-time performance comparison, multiple scenarios, and realistic embedding generation.
+
 ## Performance
 
 Progressive enhancement automatically selects the fastest available backend:

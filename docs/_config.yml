@@ -1,0 +1,26 @@
+# GitHub Pages configuration for MaxSim CPU.js
+title: MaxSim CPU.js Benchmark
+description: High-performance JavaScript/WASM implementation for ColBERT and late-interaction retrieval
+
+# Disable Jekyll processing for certain files
+include:
+  - "_*"
+  - ".nojekyll"
+
+# Enable GitHub Pages features
+plugins:
+  - jekyll-relative-links
+
+# Markdown settings
+markdown: kramdown
+highlighter: rouge
+
+# Site settings
+baseurl: ""
+url: ""
+
+# Exclude files from processing
+exclude:
+  - README.md
+  - node_modules/
+  - package*.json
