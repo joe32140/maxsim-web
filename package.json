@@ -1,6 +1,6 @@
 {
   "name": "maxsim-web",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "JavaScript/WASM MaxSim implementation for ColBERT and late-interaction retrieval - Browser and Node.js optimized with WASM+SIMD",
   "type": "module",
   "main": "dist/index.js",

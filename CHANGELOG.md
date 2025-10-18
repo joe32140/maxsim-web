@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Web Worker parallelization
 - Browser bundle (UMD/ESM)
 
+## [0.3.0] - 2025-10-18
+
+### Added
+- **Adaptive cache blocking** inspired by mixedbread-ai/maxsim-cpu
+  - Dynamic block sizes based on document length (16 for short docs, 4 for long docs)
+  - Prevents cache thrashing on large documents
+  - Maximizes throughput on small documents
+- Macro-based code generation for specialized SIMD functions
+
+### Changed
+- **Major code refactoring**: Reduced from 1,315 to 486 lines (63% reduction)
+  - Consolidated 6 duplicate dot product implementations into 1 macro + dispatcher
+  - Removed 8 duplicate matrix multiply functions
+  - Eliminated all unused/dead code
+- Improved build time by 65% (0.6s → 0.21s)
+- Reduced compiler warnings from 3 to 1
+
+### Performance
+- Maintained 7.58x speedup over JavaScript baseline
+- Adaptive blocking improves cache utilization across variable workloads
+
 ## [0.2.1] - 2025-10-17
 
 ### Added

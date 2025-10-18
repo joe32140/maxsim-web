@@ -13,3 +13,4 @@ src/rust/Cargo.lock
 pkg/
 *.wasm
 .env
+.amazonq
