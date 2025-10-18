@@ -108,24 +108,46 @@ L2 normalize embeddings.
 - **[ColBERT](https://github.com/stanford-futuredata/ColBERT)** - Late interaction retrieval model
 - **[sentence-transformers](https://github.com/UKPLab/sentence-transformers)** - Sentence embedding models
 
-## Benchmarking
+## Benchmark Results
 
-Test performance across different implementations:
+### Test Environment
+- **CPU:** Intel Core i9-13900K (16 cores, 32 threads)
+- **Architecture:** x86_64 with AVX2, SIMD support
+- **Browser:** Modern browser with WASM+SIMD support
 
-### Browser (WASM + JS)
+### Performance Summary
+
+**Large Scenario** - 100 docs × 512 tokens each (419,430,400 total operations)
+
+| Implementation | Mean (ms) | Median (ms) | P95 (ms) | Throughput (docs/s) | Speedup |
+|----------------|-----------|-------------|----------|---------------------|---------|
+| JS Baseline    | 209.67    | 209.35      | 214.60   | 477                 | 1.00x   |
+| JS Optimized   | 154.90    | 154.50      | 158.70   | 646                 | 1.35x   |
+| **WASM+SIMD**  | **16.08** | **15.65**   | **21.10**| **6,220**           | **13.04x** |
+
+### Key Insights
+
+- **WASM+SIMD delivers 13x speedup** over baseline JavaScript
+- **6,220 docs/s throughput** - suitable for real-time applications
+- **Consistent performance** with low P95 latency (21ms)
+- **Progressive enhancement** automatically selects fastest backend
+
+### Running Benchmarks
+
+#### Interactive Browser Benchmark
 ```bash
 npm run benchmark:browser
 # Open http://localhost:8080/
 ```
-**Results:** WASM achieves ~11x speedup (21,218 docs/s vs 1,871 baseline)
+Test all implementations with real-time performance comparison and multiple scenarios.
 
-### Node.js (JS only)
+#### Node.js Benchmark
 ```bash
 npm run benchmark small
 ```
 **Note:** WASM only works in browsers. Node.js benchmarks test JavaScript implementations only.
 
-See [benchmark/README.md](benchmark/README.md) for details.
+See [benchmark/README.md](benchmark/README.md) for detailed methodology and additional scenarios.
 
 ## License
 
