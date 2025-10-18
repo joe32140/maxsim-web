@@ -73,6 +73,10 @@ jobs:
           
           # Copy built files
           cp -r dist/* docs/dist/
+          
+          # Also copy WASM files to root for easier access
+          mkdir -p docs/wasm
+          cp -r dist/wasm/* docs/wasm/ || echo "No WASM files to copy"
 
       - name: Fix import paths for GitHub Pages
         run: |

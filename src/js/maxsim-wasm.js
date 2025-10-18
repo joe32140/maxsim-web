@@ -42,8 +42,8 @@ export class MaxSimWasm {
           console.log(`🔄 Retrying WASM initialization (attempt ${attempt}/${maxRetries})...`);
         }
 
-        // Dynamic import of WASM module
-        const wasmModule = await import('/dist/wasm/maxsim_cpu_wasm.js');
+        // Dynamic import of WASM module - use relative path for GitHub Pages compatibility
+        const wasmModule = await import('../../dist/wasm/maxsim_cpu_wasm.js');
 
         // Initialize WASM
         await wasmModule.default();
