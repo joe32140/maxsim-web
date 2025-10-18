@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>MaxSim Web Benchmark</title>
     <style>
         * {
@@ -15,7 +15,13 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            padding: 20px;
+            padding: 10px;
+        }
+
+        @media (min-width: 768px) {
+            body {
+                padding: 20px;
+            }
         }
 
         .container {
@@ -30,22 +36,45 @@
         header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 30px;
+            padding: 20px 15px;
             text-align: center;
         }
 
+        @media (min-width: 768px) {
+            header {
+                padding: 30px;
+            }
+        }
+
         header h1 {
-            font-size: 2.5em;
+            font-size: 1.8em;
             margin-bottom: 10px;
+            line-height: 1.2;
         }
 
         header p {
-            font-size: 1.2em;
+            font-size: 1em;
             opacity: 0.9;
         }
 
+        @media (min-width: 768px) {
+            header h1 {
+                font-size: 2.5em;
+            }
+            
+            header p {
+                font-size: 1.2em;
+            }
+        }
+
         .content {
-            padding: 30px;
+            padding: 15px;
+        }
+
+        @media (min-width: 768px) {
+            .content {
+                padding: 30px;
+            }
         }
 
         .status {
@@ -81,9 +110,22 @@
 
         .controls {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: 1fr;
             gap: 15px;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
+        }
+
+        @media (min-width: 768px) {
+            .controls {
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                margin-bottom: 30px;
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .controls {
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            }
         }
 
         .control-group {
@@ -98,11 +140,19 @@
         }
 
         select, input[type="number"] {
-            padding: 10px;
+            padding: 12px;
             border: 2px solid #ddd;
             border-radius: 6px;
-            font-size: 14px;
+            font-size: 16px; /* Prevents zoom on iOS */
             transition: border-color 0.3s;
+            min-height: 44px; /* Touch-friendly minimum */
+        }
+
+        @media (min-width: 768px) {
+            select, input[type="number"] {
+                padding: 10px;
+                font-size: 14px;
+            }
         }
 
         select:focus, input[type="number"]:focus {
@@ -111,15 +161,30 @@
         }
 
         .buttons {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 30px;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        @media (min-width: 480px) {
+            .buttons {
+                grid-template-columns: 1fr 1fr;
+                gap: 15px;
+            }
+        }
+
+        @media (min-width: 768px) {
+            .buttons {
+                display: flex;
+                margin-bottom: 30px;
+            }
         }
 
         button {
             flex: 1;
-            padding: 15px 30px;
-            font-size: 16px;
+            padding: 12px 20px;
+            font-size: 14px;
             font-weight: 600;
             border: none;
             border-radius: 8px;
@@ -127,6 +192,14 @@
             transition: all 0.3s;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            min-height: 44px; /* Touch-friendly minimum */
+        }
+
+        @media (min-width: 768px) {
+            button {
+                padding: 15px 30px;
+                font-size: 16px;
+            }
         }
 
         button:disabled {
@@ -156,9 +229,16 @@
         .progress {
             background: #f5f5f5;
             border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
+            padding: 15px;
+            margin-bottom: 15px;
             display: none;
+        }
+
+        @media (min-width: 768px) {
+            .progress {
+                padding: 20px;
+                margin-bottom: 20px;
+            }
         }
 
         .progress.active {
@@ -195,22 +275,55 @@
 
         .results h2 {
             color: #333;
-            margin-bottom: 20px;
-            font-size: 1.8em;
+            margin-bottom: 15px;
+            font-size: 1.4em;
+        }
+
+        @media (min-width: 768px) {
+            .results h2 {
+                margin-bottom: 20px;
+                font-size: 1.8em;
+            }
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            font-size: 12px;
         }
 
         th, td {
-            padding: 12px 15px;
+            padding: 8px 6px;
             text-align: left;
             border-bottom: 1px solid #e0e0e0;
-            font-size: 14px;
+            font-size: 12px;
+        }
+
+        @media (min-width: 768px) {
+            table {
+                margin-bottom: 30px;
+                font-size: 14px;
+            }
+            
+            th, td {
+                padding: 12px 15px;
+                font-size: 14px;
+            }
+        }
+
+        /* Mobile table scrolling */
+        .table-container {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        @media (max-width: 767px) {
+            .table-container {
+                margin: 0 -15px;
+                padding: 0 15px;
+            }
         }
 
         td:nth-child(5), th:nth-child(5) {
@@ -249,40 +362,73 @@
         }
 
         .chart {
-            margin-top: 30px;
-            padding: 20px;
+            margin-top: 20px;
+            padding: 15px;
             background: #f5f5f5;
             border-radius: 8px;
+        }
+
+        @media (min-width: 768px) {
+            .chart {
+                margin-top: 30px;
+                padding: 20px;
+            }
         }
 
         .bar-chart {
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 10px;
+        }
+
+        @media (min-width: 768px) {
+            .bar-chart {
+                gap: 15px;
+            }
         }
 
         .bar-row {
             display: flex;
             align-items: center;
-            gap: 15px;
-            min-height: 50px;
+            gap: 10px;
+            min-height: 40px;
+        }
+
+        @media (min-width: 768px) {
+            .bar-row {
+                gap: 15px;
+                min-height: 50px;
+            }
         }
 
         .bar-label {
-            min-width: 180px;
+            min-width: 120px;
             font-weight: 600;
             color: #333;
-            font-size: 14px;
+            font-size: 12px;
+        }
+
+        @media (min-width: 768px) {
+            .bar-label {
+                min-width: 180px;
+                font-size: 14px;
+            }
         }
 
         .bar-container {
             flex: 1;
             background: #e0e0e0;
             border-radius: 6px;
-            height: 40px;
+            height: 32px;
             position: relative;
             overflow: hidden;
             border: 1px solid #ccc;
+        }
+
+        @media (min-width: 768px) {
+            .bar-container {
+                height: 40px;
+            }
         }
 
         .bar-fill {
@@ -291,24 +437,42 @@
             display: flex;
             align-items: center;
             justify-content: flex-end;
-            padding: 0 10px;
+            padding: 0 8px;
             color: white;
             font-weight: 600;
-            font-size: 13px;
+            font-size: 11px;
             transition: width 1s ease-out;
-            min-width: 60px;
+            min-width: 50px;
             white-space: nowrap;
+        }
+
+        @media (min-width: 768px) {
+            .bar-fill {
+                padding: 0 10px;
+                font-size: 13px;
+                min-width: 60px;
+            }
         }
 
         .log {
             background: #f5f5f5;
             border-radius: 8px;
-            padding: 20px;
-            margin-top: 20px;
-            max-height: 300px;
+            padding: 15px;
+            margin-top: 15px;
+            max-height: 200px;
             overflow-y: auto;
             font-family: 'Courier New', monospace;
-            font-size: 12px;
+            font-size: 11px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        @media (min-width: 768px) {
+            .log {
+                padding: 20px;
+                margin-top: 20px;
+                max-height: 300px;
+                font-size: 12px;
+            }
         }
 
         .log-entry {
@@ -615,18 +779,19 @@
                 <h3>${scenario.name} - ${scenario.description}</h3>
                 <p><strong>Total Operations:</strong> ${calculateOperations(scenario).toLocaleString()}</p>
 
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Implementation</th>
-                            <th>Mean (ms)</th>
-                            <th>Median (ms)</th>
-                            <th>P95 (ms)</th>
-                            <th>Throughput (docs/s)</th>
-                            <th>Speedup</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Implementation</th>
+                                <th>Mean (ms)</th>
+                                <th>Median (ms)</th>
+                                <th>P95 (ms)</th>
+                                <th>Throughput (docs/s)</th>
+                                <th>Speedup</th>
+                            </tr>
+                        </thead>
+                        <tbody>
             `;
 
             for (const result of results) {
@@ -649,6 +814,7 @@
             html += `
                     </tbody>
                 </table>
+                </div>
 
                 <div class="chart">
                     <h4>Throughput Comparison</h4>
