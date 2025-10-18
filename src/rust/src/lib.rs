@@ -10,8 +10,6 @@ use std::arch::wasm32::*;
 #[wasm_bindgen]
 pub struct MaxSimWasm {
     normalized: bool,
-    similarity_memory: Vec<f32>,
-    max_memory_size: usize,
 }
 
 #[wasm_bindgen]
@@ -20,8 +18,6 @@ impl MaxSimWasm {
     pub fn new(normalized: bool) -> MaxSimWasm {
         MaxSimWasm { 
             normalized,
-            similarity_memory: Vec::with_capacity(10 * 1024 * 1024 / 4),
-            max_memory_size: 100 * 1024 * 1024 / 4,
         }
     }
 
