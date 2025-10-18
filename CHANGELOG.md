@@ -8,16 +8,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- WASM implementation with SIMD (expected 10x improvement)
 - Web Worker parallelization
 - Browser bundle (UMD/ESM)
-- npm package publishing
+
+## [0.2.1] - 2025-10-17
+
+### Added
+- **Comprehensive Correctness Test Suite**: Added mathematical correctness tests for all implementations
+  - 29 Jest unit tests covering exact MaxSim calculations, edge cases, and cross-implementation validation
+  - Interactive browser test page for WASM correctness validation (10 real-time tests)
+  - Test runner script with `npm run test:correctness` commands
+  - Detailed test documentation in `test/README.md`
+- **WASM Module Naming**: Updated WASM module from `maxsim_cpu_wasm` to `maxsim_web_wasm` for consistency
+- **Mathematical Validation**: Tests verify perfect matches (1.0), orthogonal vectors (0.0), opposite vectors (-1.0)
+- **Implementation Consistency**: Cross-validation between Baseline, Optimized, and WASM implementations
+- **Edge Case Coverage**: Zero vectors, large dimensions (384D), large batches (100+ docs), precision scenarios
+
+### Changed
+- WASM module naming from `maxsim_cpu_wasm` to `maxsim_web_wasm` to reflect web focus
+- Enhanced test infrastructure with browser-based WASM correctness validation
+
+### Fixed
+- WASM import paths updated to use correct module naming
+- Source file structure aligned with distribution files
 
 ## [0.2.0] - 2025-10-17
 
 ### Added
 - Loop unrolling optimizations (8x for dot product, 4x for cosine)
-- Comprehensive Phase 2 findings document ([PHASE2_FINDINGS.md](PHASE2_FINDINGS.md))
 - Additional tests for typed array consistency (25 tests total)
 
 ### Changed

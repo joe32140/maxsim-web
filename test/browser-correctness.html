@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MaxSim WASM Correctness Tests</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+        
+        .test-section h2 {
+            color: #555;
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+        
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        
+        .test-result.pass {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .test-result.fail {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .test-result.skip {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .status {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        
+        .status.info {
+            background: #e3f2fd;
+            color: #1976d2;
+            border: 1px solid #90caf9;
+        }
+        
+        .status.success {
+            background: #e8f5e9;
+            color: #388e3c;
+            border: 1px solid #81c784;
+        }
+        
+        .status.error {
+            background: #ffebee;
+            color: #d32f2f;
+            border: 1px solid #e57373;
+        }
+        
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        
+        button:hover {
+            background: #0056b3;
+        }
+        
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .summary {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            text-align: center;
+        }
+        
+        .summary h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        
+        .metric {
+            display: inline-block;
+            margin: 0 20px;
+            text-align: center;
+        }
+        
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        
+        .metric-label {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .test-details {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 MaxSim WASM Correctness Tests</h1>
+        
+        <div id="status" class="status info">
+            Initializing test suite...
+        </div>
+        
+        <div style="text-align: center; margin-bottom: 30px;">
+            <button id="runAllBtn">Run All Tests</button>
+            <button id="runBasicBtn">Run Basic Tests</button>
+            <button id="runAdvancedBtn">Run Advanced Tests</button>
+        </div>
+        
+        <div id="testResults"></div>
+        
+        <div id="summary" class="summary" style="display: none;">
+            <h3>Test Summary</h3>
+            <div class="metric">
+                <div id="passedCount" class="metric-value">0</div>
+                <div class="metric-label">Passed</div>
+            </div>
+            <div class="metric">
+                <div id="failedCount" class="metric-value">0</div>
+                <div class="metric-label">Failed</div>
+            </div>
+            <div class="metric">
+                <div id="skippedCount" class="metric-value">0</div>
+                <div class="metric-label">Skipped</div>
+            </div>
+            <div class="metric">
+                <div id="totalTime" class="metric-value">0ms</div>
+                <div class="metric-label">Total Time</div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { MaxSimWasm } from '../src/js/maxsim-wasm.js';
+        import { MaxSimBaseline } from '../src/js/maxsim-baseline.js';
+        import { MaxSimOptimized } from '../src/js/maxsim-optimized.js';
+
+        // Test framework
+        class TestRunner {
+            constructor() {
+                this.tests = [];
+                this.results = [];
+                this.wasmImpl = null;
+                this.baselineImpl = null;
+                this.optimizedImpl = null;
+            }
+
+            async init() {
+                const statusEl = document.getElementById('status');
+                
+                try {
+                    // Check WASM support
+                    if (!await MaxSimWasm.isSupported()) {
+                        statusEl.textContent = 'WASM SIMD not supported in this browser';
+                        statusEl.className = 'status error';
+                        return false;
+                    }
+
+                    statusEl.textContent = 'Initializing WASM module...';
+                    
+                    // Initialize implementations
+                    this.wasmImpl = new MaxSimWasm({ normalized: true });
+                    await this.wasmImpl.init();
+                    
+                    this.baselineImpl = new MaxSimBaseline({ normalized: true });
+                    this.optimizedImpl = new MaxSimOptimized({ normalized: true });
+                    
+                    statusEl.textContent = 'Ready to run tests';
+                    statusEl.className = 'status success';
+                    return true;
+                } catch (error) {
+                    statusEl.textContent = `Initialization failed: ${error.message}`;
+                    statusEl.className = 'status error';
+                    return false;
+                }
+            }
+
+            addTest(name, testFn, category = 'basic') {
+                this.tests.push({ name, testFn, category });
+            }
+
+            async runTests(category = null) {
+                const startTime = performance.now();
+                this.results = [];
+                
+                const testsToRun = category ? 
+                    this.tests.filter(t => t.category === category) : 
+                    this.tests;
+
+                for (const test of testsToRun) {
+                    const result = await this.runSingleTest(test);
+                    this.results.push(result);
+                    this.displayResult(result);
+                }
+
+                const endTime = performance.now();
+                this.displaySummary(endTime - startTime);
+            }
+
+            async runSingleTest(test) {
+                const startTime = performance.now();
+                
+                try {
+                    await test.testFn();
+                    const endTime = performance.now();
+                    return {
+                        name: test.name,
+                        category: test.category,
+                        status: 'pass',
+                        time: endTime - startTime,
+                        message: 'Test passed'
+                    };
+                } catch (error) {
+                    const endTime = performance.now();
+                    return {
+                        name: test.name,
+                        category: test.category,
+                        status: 'fail',
+                        time: endTime - startTime,
+                        message: error.message
+                    };
+                }
+            }
+
+            displayResult(result) {
+                const resultsEl = document.getElementById('testResults');
+                
+                const testEl = document.createElement('div');
+                testEl.className = 'test-section';
+                
+                const statusClass = result.status === 'pass' ? 'pass' : 
+                                  result.status === 'fail' ? 'fail' : 'skip';
+                
+                const statusIcon = result.status === 'pass' ? '✅' : 
+                                 result.status === 'fail' ? '❌' : '⚠️';
+                
+                testEl.innerHTML = `
+                    <h2>${statusIcon} ${result.name}</h2>
+                    <div class="test-result ${statusClass}">
+                        Status: ${result.status.toUpperCase()} (${result.time.toFixed(2)}ms)
+                        <br>Message: ${result.message}
+                    </div>
+                `;
+                
+                resultsEl.appendChild(testEl);
+            }
+
+            displaySummary(totalTime) {
+                const summaryEl = document.getElementById('summary');
+                const passed = this.results.filter(r => r.status === 'pass').length;
+                const failed = this.results.filter(r => r.status === 'fail').length;
+                const skipped = this.results.filter(r => r.status === 'skip').length;
+                
+                document.getElementById('passedCount').textContent = passed;
+                document.getElementById('failedCount').textContent = failed;
+                document.getElementById('skippedCount').textContent = skipped;
+                document.getElementById('totalTime').textContent = `${totalTime.toFixed(0)}ms`;
+                
+                summaryEl.style.display = 'block';
+            }
+
+            // Helper methods for assertions
+            assertEqual(actual, expected, tolerance = 1e-10) {
+                if (Math.abs(actual - expected) > tolerance) {
+                    throw new Error(`Expected ${expected}, got ${actual} (tolerance: ${tolerance})`);
+                }
+            }
+
+            assertArrayEqual(actual, expected, tolerance = 1e-5) {
+                if (actual.length !== expected.length) {
+                    throw new Error(`Array length mismatch: expected ${expected.length}, got ${actual.length}`);
+                }
+                for (let i = 0; i < actual.length; i++) {
+                    if (Math.abs(actual[i] - expected[i]) > tolerance) {
+                        throw new Error(`Array element ${i}: expected ${expected[i]}, got ${actual[i]}`);
+                    }
+                }
+            }
+        }
+
+        // Initialize test runner
+        const runner = new TestRunner();
+
+        // Basic correctness tests
+        runner.addTest('Perfect Match Test', async () => {
+            const query = [[1.0, 0.0], [0.0, 1.0]];
+            const doc = [[1.0, 0.0], [0.0, 1.0]];
+            
+            const wasmScore = runner.wasmImpl.maxsim(query, doc);
+            const baselineScore = runner.baselineImpl.maxsim(query, doc);
+            
+            runner.assertEqual(wasmScore, 1.0, 1e-5);
+            runner.assertEqual(wasmScore, baselineScore, 1e-5);
+        }, 'basic');
+
+        runner.addTest('Orthogonal Vectors Test', async () => {
+            const query = [[1.0, 0.0]];
+            const doc = [[0.0, 1.0]];
+            
+            const wasmScore = runner.wasmImpl.maxsim(query, doc);
+            const baselineScore = runner.baselineImpl.maxsim(query, doc);
+            
+            runner.assertEqual(wasmScore, 0.0, 1e-5);
+            runner.assertEqual(wasmScore, baselineScore, 1e-5);
+        }, 'basic');
+
+        runner.addTest('Opposite Vectors Test', async () => {
+            const query = [[1.0, 0.0]];
+            const doc = [[-1.0, 0.0]];
+            
+            const wasmScore = runner.wasmImpl.maxsim(query, doc);
+            const baselineScore = runner.baselineImpl.maxsim(query, doc);
+            
+            runner.assertEqual(wasmScore, -1.0, 1e-5);
+            runner.assertEqual(wasmScore, baselineScore, 1e-5);
+        }, 'basic');
+
+        runner.addTest('Batch Processing Test', async () => {
+            const query = [[1.0, 0.0]];
+            const docs = [
+                [[1.0, 0.0]],     // Perfect match: 1.0
+                [[0.0, 1.0]],     // Orthogonal: 0.0
+                [[-1.0, 0.0]]     // Opposite: -1.0
+            ];
+            
+            const wasmScores = runner.wasmImpl.maxsimBatch(query, docs);
+            const baselineScores = runner.baselineImpl.maxsimBatch(query, docs);
+            
+            const expectedScores = [1.0, 0.0, -1.0];
+            
+            runner.assertArrayEqual(Array.from(wasmScores), expectedScores, 1e-5);
+            runner.assertArrayEqual(Array.from(wasmScores), baselineScores, 1e-5);
+        }, 'basic');
+
+        runner.addTest('Multi-token Query Test', async () => {
+            const query = [[1.0, 0.0], [0.0, 1.0]];
+            const doc = [[1.0, 0.0], [0.0, 1.0], [0.5, 0.5]];
+            
+            // Normalize the last doc token
+            const norm = Math.sqrt(0.5 * 0.5 + 0.5 * 0.5);
+            doc[2] = [0.5/norm, 0.5/norm];
+            
+            const wasmScore = runner.wasmImpl.maxsim(query, doc);
+            const baselineScore = runner.baselineImpl.maxsim(query, doc);
+            const optimizedScore = runner.optimizedImpl.maxsim(query, doc);
+            
+            // Each query token should find perfect match: (1.0 + 1.0) / 2 = 1.0
+            runner.assertEqual(wasmScore, 1.0, 1e-5);
+            runner.assertEqual(wasmScore, baselineScore, 1e-5);
+            runner.assertEqual(wasmScore, optimizedScore, 1e-5);
+        }, 'basic');
+
+        // Advanced tests
+        runner.addTest('Large Dimension Test', async () => {
+            const dim = 384;
+            const query = [Array(dim).fill(0).map((_, i) => i === 0 ? 1.0 : 0.0)];
+            const doc = [Array(dim).fill(0).map((_, i) => i === 0 ? 1.0 : 0.0)];
+            
+            const wasmScore = runner.wasmImpl.maxsim(query, doc);
+            const baselineScore = runner.baselineImpl.maxsim(query, doc);
+            
+            runner.assertEqual(wasmScore, 1.0, 1e-5);
+            runner.assertEqual(wasmScore, baselineScore, 1e-5);
+        }, 'advanced');
+
+        runner.addTest('Large Batch Test', async () => {
+            const query = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+            const docs = Array(100).fill(0).map((_, i) => [
+                [Math.cos(i * 0.1), Math.sin(i * 0.1), 0.0],
+                [0.0, 0.0, 1.0]
+            ]);
+            
+            const wasmScores = runner.wasmImpl.maxsimBatch(query, docs);
+            const baselineScores = runner.baselineImpl.maxsimBatch(query, docs);
+            
+            runner.assertArrayEqual(Array.from(wasmScores), baselineScores, 1e-4);
+        }, 'advanced');
+
+        runner.addTest('Mixed Similarity Test', async () => {
+            const query = [[1.0, 0.0, 0.0]];
+            const doc = [
+                [1.0, 0.0, 0.0],    // Perfect match: 1.0
+                [0.0, 1.0, 0.0],    // Orthogonal: 0.0
+                [0.5, 0.5, 0.0]     // Partial match
+            ];
+            
+            // Normalize the last doc token
+            const norm = Math.sqrt(0.5 * 0.5 + 0.5 * 0.5);
+            doc[2] = [0.5/norm, 0.5/norm, 0.0];
+            
+            const wasmScore = runner.wasmImpl.maxsim(query, doc);
+            const baselineScore = runner.baselineImpl.maxsim(query, doc);
+            
+            // Should pick the maximum similarity = 1.0
+            runner.assertEqual(wasmScore, 1.0, 1e-5);
+            runner.assertEqual(wasmScore, baselineScore, 1e-5);
+        }, 'advanced');
+
+        runner.addTest('Precision Test', async () => {
+            // Test with very small differences to check precision
+            const query = [[1.0, 0.0]];
+            const doc = [[0.9999999, 0.0000001]];
+            
+            // Normalize doc token
+            const norm = Math.sqrt(0.9999999 * 0.9999999 + 0.0000001 * 0.0000001);
+            doc[0] = [0.9999999/norm, 0.0000001/norm];
+            
+            const wasmScore = runner.wasmImpl.maxsim(query, doc);
+            const baselineScore = runner.baselineImpl.maxsim(query, doc);
+            
+            // Should be very close to 1.0
+            runner.assertEqual(wasmScore, baselineScore, 1e-6);
+            if (Math.abs(wasmScore - 1.0) > 1e-6) {
+                throw new Error(`Precision test failed: score ${wasmScore} too far from 1.0`);
+            }
+        }, 'advanced');
+
+        runner.addTest('Zero Vector Test', async () => {
+            const query = [[1.0, 0.0]];
+            const doc = [[0.0, 0.0]];
+            
+            const wasmScore = runner.wasmImpl.maxsim(query, doc);
+            const baselineScore = runner.baselineImpl.maxsim(query, doc);
+            
+            runner.assertEqual(wasmScore, 0.0, 1e-5);
+            runner.assertEqual(wasmScore, baselineScore, 1e-5);
+        }, 'advanced');
+
+        // Event handlers
+        document.getElementById('runAllBtn').addEventListener('click', async () => {
+            if (await runner.init()) {
+                document.getElementById('testResults').innerHTML = '';
+                await runner.runTests();
+            }
+        });
+
+        document.getElementById('runBasicBtn').addEventListener('click', async () => {
+            if (await runner.init()) {
+                document.getElementById('testResults').innerHTML = '';
+                await runner.runTests('basic');
+            }
+        });
+
+        document.getElementById('runAdvancedBtn').addEventListener('click', async () => {
+            if (await runner.init()) {
+                document.getElementById('testResults').innerHTML = '';
+                await runner.runTests('advanced');
+            }
+        });
+
+        // Initialize on page load
+        window.addEventListener('load', async () => {
+            await runner.init();
+        });
+    </script>
+</body>
+</html>

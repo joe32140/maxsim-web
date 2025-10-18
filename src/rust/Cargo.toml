@@ -1,5 +1,5 @@
 [package]
-name = "maxsim-web-wasm"
+name = "maxsim_web_wasm"
 version = "0.3.0"
 authors = ["Joe"]
 edition = "2021"
