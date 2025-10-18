@@ -533,6 +533,15 @@
                         <option value="compare">Compare Both</option>
                     </select>
                 </div>
+
+                <div class="control-group">
+                    <label for="embeddingDim">Embedding Dimension</label>
+                    <select id="embeddingDim">
+                        <option value="128">128 dimensions</option>
+                        <option value="256" selected>256 dimensions</option>
+                        <option value="512">512 dimensions</option>
+                    </select>
+                </div>
             </div>
 
             <div class="buttons">
@@ -559,9 +568,9 @@
     </div>
 
     <script type="module">
-        import { MaxSimWasm } from '../src/js/maxsim-wasm.js';
-        import { MaxSimBaseline } from '../src/js/maxsim-baseline.js';
-        import { MaxSimOptimized } from '../src/js/maxsim-optimized.js';
+        import { MaxSimWasm } from '/src/js/maxsim-wasm.js';
+        import { MaxSimBaseline } from '/src/js/maxsim-baseline.js';
+        import { MaxSimOptimized } from '/src/js/maxsim-optimized.js';
         import { scenarios, generateFixtures, calculateOperations } from '/benchmark/fixtures.js';
         import { generateRealisticDataset, compareEmbeddingTypes } from '/benchmark/realistic-embeddings.js';
 
@@ -716,23 +725,29 @@
                 throw new Error(`Unknown scenario: ${scenarioName}`);
             }
 
-            log(`Starting benchmark: ${scenario.name}`);
-            log(`Query: ${scenario.queryTokens} tokens × ${scenario.dim} dims`);
-            log(`Docs: ${scenario.numDocs} docs × ${scenario.docTokens} tokens`);
-
-            setStatus(`Running ${scenario.name}...`, 'info');
-            progressEl.classList.add('active');
-
-            // Generate fixtures based on embedding type
+            // Generate fixtures based on embedding type and dimension
             const embeddingType = document.getElementById('embeddingType').value;
-            let fixtures;
+            const embeddingDim = document.getElementById('embeddingDim').value;
             
+            // Use selected embedding dimension
+            const effectiveScenario = { ...scenario };
+            effectiveScenario.dim = parseInt(embeddingDim);
+
+            log(`Starting benchmark: ${effectiveScenario.name}`);
+            log(`Query: ${effectiveScenario.queryTokens} tokens × ${effectiveScenario.dim} dims`);
+            log(`Docs: ${effectiveScenario.numDocs} docs × ${effectiveScenario.docTokens} tokens`);
+            log(`🔧 Using embedding dimension: ${effectiveScenario.dim}`);
+
+            setStatus(`Running ${effectiveScenario.name}...`, 'info');
+            progressEl.classList.add('active');
+            
+            let fixtures;
             if (embeddingType === 'realistic') {
                 log('🧬 Generating realistic ColBERT-like embeddings...');
-                fixtures = generateRealisticDataset(scenario);
+                fixtures = generateRealisticDataset(effectiveScenario);
             } else {
                 log('🎲 Generating random embeddings...');
-                fixtures = generateFixtures(scenario);
+                fixtures = generateFixtures(effectiveScenario);
             }
 
             const implementations = [
@@ -766,9 +781,9 @@
             progressEl.classList.remove('active');
 
             // Display results
-            displayResults(scenario, results);
+            displayResults(effectiveScenario, results);
 
-            return { scenario, results };
+            return { scenario: effectiveScenario, results };
         }
 
         // Display results
@@ -883,16 +898,22 @@
 
             const scenarioName = document.getElementById('scenario').value;
             const scenario = scenarios[scenarioName];
+            const embeddingDim = document.getElementById('embeddingDim').value;
+            
+            // Use selected embedding dimension
+            const effectiveScenario = { ...scenario };
+            effectiveScenario.dim = parseInt(embeddingDim);
+            log(`🔧 Using embedding dimension: ${effectiveScenario.dim}`);
             
             setStatus('Testing realism impact...', 'info');
             progressEl.classList.add('active');
             
             log('🧪 Starting realism impact test...');
-            log(`Scenario: ${scenario.name}`);
+            log(`Scenario: ${effectiveScenario.name} (${effectiveScenario.dim}D)`);
 
             // Get best available implementation
             setProgress(10, 'Initializing implementation for realism test...');
-            let implementation = await initializeWasm(scenario);
+            let implementation = await initializeWasm(effectiveScenario);
             
             if (implementation) {
                 log('✅ Using WASM+SIMD for realism test');
@@ -904,12 +925,12 @@
             setProgress(25, 'Generating random embeddings...');
             
             // Generate random embeddings
-            const randomFixtures = generateFixtures(scenario);
+            const randomFixtures = generateFixtures(effectiveScenario);
             
             setProgress(50, 'Generating realistic embeddings...');
             
             // Generate realistic embeddings
-            const realisticFixtures = generateRealisticDataset(scenario);
+            const realisticFixtures = generateRealisticDataset(effectiveScenario);
             
             setProgress(75, 'Running performance comparison...');
 
