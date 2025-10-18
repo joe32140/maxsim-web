@@ -38,10 +38,23 @@ jobs:
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Build WASM
-        run: npm run build:wasm
+        run: |
+          echo "Building WASM..."
+          cd src/rust
+          wasm-pack build --target web --out-dir ../../dist/wasm
+          rm -f ../../dist/wasm/.gitignore
+          echo "WASM build complete"
+
+      - name: Verify WASM build
+        run: |
+          echo "Checking WASM build output..."
+          ls -la dist/wasm/ || echo "WASM directory not found"
+          ls -la dist/ || echo "Dist directory not found"
+          echo "Checking for WASM binary..."
+          ls -la dist/wasm/*.wasm || echo "No WASM binary found"
 
       - name: Build project
         run: npm run build
