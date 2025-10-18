@@ -59,6 +59,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Edge case handling (empty embeddings, single tokens, large embeddings)
 - Implementation consistency tests
 
-[Unreleased]: https://github.com/yourusername/maxsim-cpu/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/yourusername/maxsim-cpu/releases/tag/v0.2.0
-[0.1.0]: https://github.com/yourusername/maxsim-cpu/releases/tag/v0.1.0
+[Unreleased]: https://github.com/joe32140/maxsim-web/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/joe32140/maxsim-web/releases/tag/v0.2.0
+[0.1.0]: https://github.com/joe32140/maxsim-web/releases/tag/v0.1.0

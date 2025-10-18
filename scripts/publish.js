@@ -61,8 +61,8 @@ async function main() {
   // Check built files
   console.log('\n📦 Checking built files...');
   allGood = true;
-  allGood &= checkFile('dist/wasm/maxsim_cpu_wasm.js', 'WASM JS bindings');
-  allGood &= checkFile('dist/wasm/maxsim_cpu_wasm.wasm', 'WASM binary');
+  allGood &= checkFile('dist/wasm/maxsim_web_wasm.js', 'WASM JS bindings');
+  allGood &= checkFile('dist/wasm/maxsim_web_wasm.wasm', 'WASM binary');
   allGood &= checkFile('dist/maxsim-wasm.js', 'WASM wrapper');
 
   if (!allGood) {

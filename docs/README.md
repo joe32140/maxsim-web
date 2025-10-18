@@ -1,6 +1,6 @@
-# MaxSim CPU.js - GitHub Pages
+# MaxSim Web - GitHub Pages
 
-This directory contains the GitHub Pages deployment for the MaxSim CPU.js benchmark.
+This directory contains the GitHub Pages deployment for the MaxSim Web benchmark.
 
 ## Structure
 

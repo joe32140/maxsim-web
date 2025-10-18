@@ -1,13 +1,13 @@
 /**
  * Basic MaxSim Example
  *
- * This example demonstrates basic usage of the maxsim-cpu library
+ * This example demonstrates basic usage of the maxsim-web library
  */
 
 import { MaxSim } from '../src/js/index.js';
 
 async function main() {
-  console.log('MaxSim CPU - Basic Example\n');
+  console.log('MaxSim Web - Basic Example\n');
 
   // Create MaxSim instance (auto-selects best backend)
   const maxsim = await MaxSim.create({

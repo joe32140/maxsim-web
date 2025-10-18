@@ -1,5 +1,5 @@
 /*!
- * MaxSim CPU - Ultra-High-Performance WASM Implementation
+ * MaxSim Web - Ultra-High-Performance WASM Implementation
  *
  * This module provides an ultra-optimized WebAssembly implementation inspired by
  * mixedbread-ai's approach, using bulk matrix operations and aggressive SIMD.

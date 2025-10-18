@@ -28,7 +28,7 @@ export class MaxSimWasm {
 
     try {
       // Import the Node.js-targeted WASM module
-      const wasmModule = await import('../../dist/wasm-node/maxsim_cpu_wasm.js');
+      const wasmModule = await import('../../dist/wasm-node/maxsim_web_wasm.js');
 
       // Create instance (Node.js target doesn't need manual init)
       this.wasmInstance = new wasmModule.MaxSimWasm(this.normalized);

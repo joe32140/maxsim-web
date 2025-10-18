@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Build script for maxsim-cpu
+ * Build script for maxsim-web
  *
  * For now, this is a simple copy script since we're using pure ES modules.
  * In the future, this will handle WASM compilation and bundling.
@@ -35,7 +35,7 @@ async function copyDir(src, dest) {
 }
 
 async function build() {
-  console.log('Building maxsim-cpu...');
+  console.log('Building maxsim-web...');
 
   const srcDir = join(rootDir, 'src', 'js');
   const distDir = join(rootDir, 'dist');

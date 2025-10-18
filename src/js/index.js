@@ -1,5 +1,5 @@
 /**
- * MaxSim CPU - Main Entry Point
+ * MaxSim Web - Main Entry Point
  *
  * Auto-selects the best available backend based on platform capabilities
  */

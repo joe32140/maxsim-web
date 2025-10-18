@@ -67,11 +67,11 @@ Batch compute MaxSim scores (optimized for multiple documents).
 ### `MaxSim.normalize(embedding)`
 L2 normalize embeddings.
 
-## Why maxsim-cpu.js?
+## Why maxsim-web?
 
 **JavaScript/WASM-optimized** implementation of MaxSim computation, complementing the original [mixedbread-ai/maxsim-cpu](https://github.com/mixedbread-ai/maxsim-cpu):
 
-| Feature | maxsim-cpu (Original) | maxsim-cpu.js (This) |
+| Feature | maxsim-cpu (Original) | maxsim-web (This) |
 |---------|----------------------|---------------------|
 | **Target** | General CPU (C++/Python) | JavaScript/WASM |
 | **Environment** | Server-side | Browser + Node.js |
@@ -89,7 +89,7 @@ L2 normalize embeddings.
 
 ## When to Use
 
-**Use maxsim-cpu.js when:**
+**Use maxsim-web when:**
 - Building web applications or browser extensions
 - Need client-side MaxSim computation
 - Want zero-dependency JavaScript solution

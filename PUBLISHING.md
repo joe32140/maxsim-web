@@ -110,8 +110,8 @@ maxsim-web/
 │   ├── maxsim-optimized.js      # Optimized JS
 │   ├── maxsim-wasm.js          # WASM wrapper
 │   └── wasm/                   # WASM binaries
-│       ├── maxsim_cpu_wasm.js  # WASM JS bindings
-│       ├── maxsim_cpu_wasm.wasm # Compiled WASM
+│       ├── maxsim_web_wasm.js  # WASM JS bindings
+│       ├── maxsim_web_wasm.wasm # Compiled WASM
 │       └── package.json        # WASM package info
 ├── README.md
 └── LICENSE

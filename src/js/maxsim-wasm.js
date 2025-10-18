@@ -43,7 +43,7 @@ export class MaxSimWasm {
         }
 
         // Dynamic import of WASM module - use relative path for GitHub Pages compatibility
-        const wasmModule = await import('../../dist/wasm/maxsim_cpu_wasm.js');
+        const wasmModule = await import('../../dist/wasm/maxsim_web_wasm.js');
 
         // Initialize WASM
         await wasmModule.default();
