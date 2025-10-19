@@ -1,13 +1,17 @@
 /*!
  * MaxSim Web - Ultra-High-Performance WASM Implementation
  *
+ * IMPORTANT: This implementation expects L2-normalized embeddings as input.
+ * Modern embedding models (ColBERT, BGE, E5, etc.) output normalized embeddings by default.
+ * For normalized embeddings, dot product equals cosine similarity.
+ *
  * MaxSim Algorithm:
- * - For each query token, find the maximum similarity with all document tokens
- * - Sum these maximum similarities: score = Σ max(q_i · d_j) for all query tokens i
+ * - For each query token, find the maximum dot product with all document tokens
+ * - Sum these maximum similarities: score = Σ max(qi · dj) for all query tokens i
  *
  * Two variants available:
- * - maxsim(): Official MaxSim (raw sum, cosine similarity) - matches ColBERT, pylate-rs, mixedbread-ai
- * - maxsim_normalized(): Normalized MaxSim (averaged, dot product) - for pre-normalized embeddings and cross-query comparison
+ * - maxsim(): Official MaxSim (raw sum) - matches ColBERT, pylate-rs, mixedbread-ai
+ * - maxsim_normalized(): Normalized MaxSim (averaged) - for cross-query comparison
  */
 
 use wasm_bindgen::prelude::*;
@@ -25,8 +29,8 @@ impl MaxSimWasm {
         MaxSimWasm {}
     }
 
-    /// Official MaxSim: raw sum with cosine similarity
-    /// Matches ColBERT, pylate-rs, mixedbread-ai implementations
+    /// Official MaxSim: raw sum with dot product
+    /// Expects L2-normalized embeddings. Matches ColBERT, pylate-rs, mixedbread-ai implementations
     #[wasm_bindgen]
     pub fn maxsim_single(
         &self,
@@ -39,8 +43,8 @@ impl MaxSimWasm {
         self.maxsim_single_impl(query_flat, query_tokens, doc_flat, doc_tokens, embedding_dim, false)
     }
 
-    /// Normalized MaxSim: averaged with dot product (for pre-normalized embeddings)
-    /// Better for cross-query comparison
+    /// Normalized MaxSim: averaged score for cross-query comparison
+    /// Expects L2-normalized embeddings
     #[wasm_bindgen]
     pub fn maxsim_single_normalized(
         &self,

@@ -1,12 +1,15 @@
 /**
  * MaxSim Baseline Implementation
  *
- * This is the baseline pure JavaScript implementation based on the standard
- * MaxSim algorithm used in ColBERT and late-interaction models.
+ * Pure JavaScript implementation of MaxSim for ColBERT and late-interaction models.
+ *
+ * **IMPORTANT**: This implementation expects **L2-normalized embeddings** as input.
+ * Most modern embedding models (ColBERT, BGE, E5, etc.) output normalized embeddings by default.
+ * For normalized embeddings, dot product equals cosine similarity, enabling faster computation.
  *
  * Algorithm:
- * For each query token, find the maximum similarity with all document tokens,
- * then sum these maximum similarities: score = Σ max(q_i · d_j)
+ * - For each query token, find the maximum dot product with all document tokens
+ * - Sum these maximum similarities: score = Σ max(qi · dj)
  *
  * Two methods available:
  * - maxsim(): Official MaxSim (raw sum) - matches ColBERT, pylate-rs, mixedbread-ai
@@ -19,10 +22,10 @@ export class MaxSimBaseline {
   constructor() {}
 
   /**
-   * Official MaxSim: raw sum with cosine similarity
+   * Official MaxSim: raw sum with dot product
    * Matches ColBERT, pylate-rs, mixedbread-ai implementations
-   * @param {number[][]} queryEmbedding - Query embeddings (tokens × dimensions)
-   * @param {number[][]} docEmbedding - Document embeddings (tokens × dimensions)
+   * @param {number[][]|Float32Array[]} queryEmbedding - L2-normalized query embeddings (tokens × dimensions)
+   * @param {number[][]|Float32Array[]} docEmbedding - L2-normalized document embeddings (tokens × dimensions)
    * @returns {number} MaxSim score (raw sum)
    */
   maxsim(queryEmbedding, docEmbedding) {
@@ -31,8 +34,8 @@ export class MaxSimBaseline {
 
   /**
    * Normalized MaxSim: averaged score for cross-query comparison
-   * @param {number[][]} queryEmbedding - Query embeddings (tokens × dimensions)
-   * @param {number[][]} docEmbedding - Document embeddings (tokens × dimensions)
+   * @param {number[][]|Float32Array[]} queryEmbedding - L2-normalized query embeddings (tokens × dimensions)
+   * @param {number[][]|Float32Array[]} docEmbedding - L2-normalized document embeddings (tokens × dimensions)
    * @returns {number} Normalized MaxSim score (averaged)
    */
   maxsim_normalized(queryEmbedding, docEmbedding) {
@@ -41,6 +44,7 @@ export class MaxSimBaseline {
 
   /**
    * Internal implementation shared by both methods
+   * Uses dot product (assumes L2-normalized embeddings)
    * @private
    */
   _maxsimImpl(queryEmbedding, docEmbedding, normalized) {
@@ -56,10 +60,11 @@ export class MaxSimBaseline {
       const queryToken = queryEmbedding[i];
       let maxSim = -Infinity;
 
-      // Find max similarity with any document token
+      // Find max dot product with any document token
+      // For L2-normalized embeddings, dot product = cosine similarity
       for (let j = 0; j < docEmbedding.length; j++) {
         const docToken = docEmbedding[j];
-        const similarity = this.cosineSimilarity(queryToken, docToken);
+        const similarity = this.dotProduct(queryToken, docToken);
         maxSim = Math.max(maxSim, similarity);
       }
 
@@ -104,34 +109,22 @@ export class MaxSimBaseline {
   }
 
   /**
-   * Compute cosine similarity between two vectors
-   * @param {number[]} vec1 - First vector
-   * @param {number[]} vec2 - Second vector
-   * @returns {number} Cosine similarity
+   * Compute dot product between two vectors
+   * For L2-normalized vectors, dot product equals cosine similarity
+   * @param {number[]|Float32Array} vec1 - First vector (L2-normalized)
+   * @param {number[]|Float32Array} vec2 - Second vector (L2-normalized)
+   * @returns {number} Dot product
    */
-  cosineSimilarity(vec1, vec2) {
-    if (!Array.isArray(vec1) || !Array.isArray(vec2) || vec1.length !== vec2.length) {
+  dotProduct(vec1, vec2) {
+    if (!vec1 || !vec2 || vec1.length !== vec2.length) {
       return 0;
     }
 
-    let dotProduct = 0;
-    let mag1 = 0;
-    let mag2 = 0;
-
+    let result = 0;
     for (let i = 0; i < vec1.length; i++) {
-      dotProduct += vec1[i] * vec2[i];
-      mag1 += vec1[i] * vec1[i];
-      mag2 += vec2[i] * vec2[i];
+      result += vec1[i] * vec2[i];
     }
-
-    mag1 = Math.sqrt(mag1);
-    mag2 = Math.sqrt(mag2);
-
-    if (mag1 === 0 || mag2 === 0) {
-      return 0;
-    }
-
-    return dotProduct / (mag1 * mag2);
+    return result;
   }
 
   /**

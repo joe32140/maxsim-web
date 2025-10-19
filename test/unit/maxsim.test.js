@@ -264,17 +264,7 @@ describe('MaxSim Implementations', () => {
       expect(score).toBeCloseTo(1.0, 10);
     });
 
-    test('should handle unnormalized vectors correctly', () => {
-      const maxsim = new MaxSimOptimized();
-      
-      // Test with unnormalized vectors
-      const query = [[2.0, 0.0]]; // magnitude = 2
-      const doc = [[3.0, 0.0]];   // magnitude = 3
-      
-      const score = maxsim.maxsim(query, doc);
-      // Cosine similarity = (2*3)/(2*3) = 1.0
-      expect(score).toBeCloseTo(1.0, 10);
-    });
+
 
     test('should compute batch results correctly', () => {
       const maxsim = new MaxSimOptimized();

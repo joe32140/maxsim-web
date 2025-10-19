@@ -46,9 +46,17 @@ async function benchmarkImplementation(implementation, fixtures, options = {}) {
 
   console.log(`  Warming up (${warmup} iterations)...`);
 
+  // Determine which method to use based on scenario
+  const methodName = fixtures.config.normalized ? 'maxsimBatch_normalized' : 'maxsimBatch';
+  const method = implementation[methodName];
+  
+  if (!method) {
+    throw new Error(`Method ${methodName} not found on implementation`);
+  }
+
   // Warmup
   for (let i = 0; i < warmup; i++) {
-    implementation.maxsimBatch(query, documents);
+    method.call(implementation, query, documents);
   }
 
   console.log(`  Running benchmark (${iterations} iterations)...`);
@@ -58,7 +66,7 @@ async function benchmarkImplementation(implementation, fixtures, options = {}) {
   // Actual benchmark
   for (let i = 0; i < iterations; i++) {
     const start = performance.now();
-    const scores = implementation.maxsimBatch(query, documents);
+    const scores = method.call(implementation, query, documents);
     const end = performance.now();
 
     times.push(end - start);
@@ -111,20 +119,22 @@ async function runBenchmark(scenarioName, options = {}) {
   const implementations = [
     {
       name: 'JS Baseline',
-      impl: new MaxSimBaseline({ normalized: scenario.normalized }),
-      needsInit: false
+      impl: new MaxSimBaseline(),
+      needsInit: false,
+      description: 'Pure JavaScript implementation'
     },
     {
-      name: 'JS Optimized',
-      impl: new MaxSimOptimized({ normalized: scenario.normalized }),
-      needsInit: false
+      name: 'JS Optimized (JIT)',
+      impl: new MaxSimOptimized(),
+      needsInit: false,
+      description: 'JIT-optimized with 4x loop unrolling + warmup'
     }
   ];
 
   // Try to add WASM if available
   if (await MaxSimWasm.isSupported()) {
     try {
-      const wasmImpl = new MaxSimWasm({ normalized: scenario.normalized });
+      const wasmImpl = new MaxSimWasm();
       await wasmImpl.init();
       implementations.push({
         name: 'WASM SIMD',
@@ -142,8 +152,9 @@ async function runBenchmark(scenarioName, options = {}) {
 
   const results = {};
 
-  for (const { name, impl } of implementations) {
+  for (const { name, impl, description } of implementations) {
     console.log(`\nBenchmarking: ${name}`);
+    console.log(`  Description: ${description}`);
     const result = await benchmarkImplementation(impl, fixtures, options);
     results[name] = result;
 

@@ -5,13 +5,17 @@
  * High-performance implementation using WebAssembly with SIMD instructions.
  * Expected performance: 10x faster than pure JavaScript baseline.
  *
+ * **IMPORTANT**: This implementation expects **L2-normalized embeddings** as input.
+ * Modern embedding models (ColBERT, BGE, E5, etc.) output normalized embeddings by default.
+ * For normalized embeddings, dot product equals cosine similarity.
+ *
  * Algorithm:
- * For each query token, find the maximum similarity with all document tokens,
- * then sum these maximum similarities: score = Σ max(q_i · d_j)
+ * For each query token, find the maximum dot product with all document tokens,
+ * then sum these maximum similarities: score = Σ max(qi · dj)
  *
  * Two methods available:
- * - maxsim(): Official MaxSim (raw sum, cosine similarity) - matches ColBERT, pylate-rs, mixedbread-ai
- * - maxsim_normalized(): Normalized MaxSim (averaged, dot product) - for pre-normalized embeddings and cross-query comparison
+ * - maxsim(): Official MaxSim (raw sum) - matches ColBERT, pylate-rs, mixedbread-ai
+ * - maxsim_normalized(): Normalized MaxSim (averaged) - for cross-query comparison
  *
  * Requirements:
  * - Browser with WASM SIMD support (Chrome 91+, Firefox 89+, Safari 16.4+)
@@ -84,10 +88,10 @@ export class MaxSimWasm {
     }
 
     /**
-     * Official MaxSim: raw sum with cosine similarity
+     * Official MaxSim: raw sum with dot product
      * Matches ColBERT, pylate-rs, mixedbread-ai implementations
-     * @param {number[][]|Float32Array[]} queryEmbedding - Query embeddings
-     * @param {number[][]|Float32Array[]} docEmbedding - Document embeddings
+     * @param {number[][]|Float32Array[]} queryEmbedding - L2-normalized query embeddings
+     * @param {number[][]|Float32Array[]} docEmbedding - L2-normalized document embeddings
      * @returns {number} MaxSim score (raw sum)
      */
     maxsim(queryEmbedding, docEmbedding) {
@@ -114,8 +118,8 @@ export class MaxSimWasm {
 
     /**
      * Normalized MaxSim: averaged score for cross-query comparison
-     * @param {number[][]|Float32Array[]} queryEmbedding - Query embeddings
-     * @param {number[][]|Float32Array[]} docEmbedding - Document embeddings
+     * @param {number[][]|Float32Array[]} queryEmbedding - L2-normalized query embeddings
+     * @param {number[][]|Float32Array[]} docEmbedding - L2-normalized document embeddings
      * @returns {number} Normalized MaxSim score (averaged)
      */
     maxsim_normalized(queryEmbedding, docEmbedding) {

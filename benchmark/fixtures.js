@@ -83,7 +83,7 @@ export const scenarios = {
     docTokens: 64,
     numDocs: 10,
     dim: 128,
-    normalized: true
+    normalized: false
   },
   'small': {
     name: 'Small',
@@ -92,7 +92,7 @@ export const scenarios = {
     docTokens: 256,
     numDocs: 10,
     dim: 128,
-    normalized: true
+    normalized: false
   },
   'medium': {
     name: 'Medium',
@@ -101,7 +101,7 @@ export const scenarios = {
     docTokens: 256,
     numDocs: 100,
     dim: 128,
-    normalized: true
+    normalized: false
   },
   'large': {
     name: 'Large',
@@ -110,7 +110,7 @@ export const scenarios = {
     docTokens: 512,
     numDocs: 100,
     dim: 128,
-    normalized: true
+    normalized: false
   },
   'realistic': {
     name: 'Realistic',
@@ -119,7 +119,7 @@ export const scenarios = {
     docTokens: 2000,
     numDocs: 100,
     dim: 128,
-    normalized: true
+    normalized: false
   },
   'xl': {
     name: 'Extra Large',
@@ -128,7 +128,7 @@ export const scenarios = {
     docTokens: 512,
     numDocs: 1000,
     dim: 128,
-    normalized: true
+    normalized: false
   }
 };
 

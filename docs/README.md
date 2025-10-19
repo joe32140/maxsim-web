@@ -2,6 +2,14 @@
 
 This directory contains the GitHub Pages deployment for the MaxSim Web benchmark.
 
+## Performance Results
+
+- **WASM+SIMD**: ~11x speedup in browsers
+- **JS Optimized**: 1.25x speedup in Node.js, minimal improvement in browsers
+- **JS Baseline**: Universal compatibility baseline
+
+**Note**: JIT optimizations work well in Node.js but show minimal improvement in browsers due to different optimization strategies.
+
 ## Structure
 
 - `index.html` - Landing page
@@ -20,4 +28,4 @@ npm run build
 npm run benchmark:browser
 ```
 
-Then visit http://localhost:3000
+Then visit http://localhost:8080
