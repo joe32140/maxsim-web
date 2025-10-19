@@ -16,13 +16,17 @@ npm install maxsim-web
 import { MaxSim } from 'maxsim-web';
 
 // Auto-selects best backend (WASM → JS optimized → baseline)
-const maxsim = await MaxSim.create({ normalized: true });
+const maxsim = await MaxSim.create();
 
-// Single document scoring
+// Official MaxSim (raw sum) - matches ColBERT, pylate-rs, mixedbread-ai
 const score = maxsim.maxsim(queryEmbedding, docEmbedding);
+
+// Normalized MaxSim (averaged) - for cross-query comparison
+const normalizedScore = maxsim.maxsim_normalized(queryEmbedding, docEmbedding);
 
 // Batch scoring (optimized)
 const scores = maxsim.maxsimBatch(queryEmbedding, [doc1, doc2, doc3]);
+const normalizedScores = maxsim.maxsimBatch_normalized(queryEmbedding, [doc1, doc2, doc3]);
 ```
 
 ## Use Cases
@@ -55,17 +59,54 @@ Progressive enhancement automatically selects the fastest available backend:
 ## API
 
 ### `MaxSim.create(options)`
-- `backend`: `'auto'` \| `'wasm'` \| `'js-optimized'` \| `'js-baseline'`
-- `normalized`: `boolean` - Pre-normalized embeddings (default: `false`)
+Creates a MaxSim instance with automatic backend selection.
 
-### `maxsim.maxsim(query, doc)`
-Compute MaxSim score between query and document embeddings.
+- `backend`: `'auto'` \| `'wasm'` \| `'js-optimized'` \| `'js-baseline'` (default: `'auto'`)
 
-### `maxsim.maxsimBatch(query, docs)`
-Batch compute MaxSim scores (optimized for multiple documents).
+### Two MaxSim Variants
 
-### `MaxSim.normalize(embedding)`
-L2 normalize embeddings.
+#### `maxsim.maxsim(query, doc)` - Official MaxSim
+**Formula:** `Σ max(qi · dj)` (raw sum)
+
+Matches the standard implementation used in:
+- ColBERT paper (2020)
+- pylate-rs (LightOn AI)
+- maxsim-cpu (mixedbread-ai)
+
+**Use when:**
+- You want to match the official ColBERT implementation
+- Ranking documents within a single query
+- Comparing to academic baselines
+
+**Returns:** Raw sum of maximum similarities (can be > 1)
+
+#### `maxsim.maxsim_normalized(query, doc)` - Normalized MaxSim
+**Formula:** `Σ max(qi · dj) / |query_tokens|` (averaged)
+
+Normalized variant for practical applications.
+
+**Use when:**
+- Comparing scores across different queries
+- Using pre-normalized embeddings (e.g., from BGE, ColBERT models)
+- Need bounded scores for threshold-based filtering
+- Cross-query result comparison
+
+**Returns:** Averaged score (typically between -1 and 1)
+
+**Note:** Both variants produce identical rankings within a single query. Normalization only affects the absolute score values.
+
+### Batch Processing
+
+#### `maxsim.maxsimBatch(query, docs)` - Official batch
+Batch compute official MaxSim scores (optimized for multiple documents).
+
+#### `maxsim.maxsimBatch_normalized(query, docs)` - Normalized batch
+Batch compute normalized MaxSim scores.
+
+### Utility Methods
+
+#### `MaxSim.normalize(embedding)`
+L2 normalize embeddings (required for `maxsim_normalized` with unnormalized embeddings).
 
 ## Why maxsim-web?
 

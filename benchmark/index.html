@@ -609,7 +609,7 @@
             }
 
             try {
-                const wasmImpl = new MaxSimWasm({ normalized: scenario.normalized });
+                const wasmImpl = new MaxSimWasm();
                 await wasmImpl.init();
                 log('✅ WASM+SIMD ready');
                 return wasmImpl;
@@ -751,8 +751,8 @@
             }
 
             const implementations = [
-                { name: 'JS Baseline', impl: new MaxSimBaseline({ normalized: scenario.normalized }) },
-                { name: 'JS Optimized', impl: new MaxSimOptimized({ normalized: scenario.normalized }) }
+                { name: 'JS Baseline', impl: new MaxSimBaseline() },
+                { name: 'JS Optimized', impl: new MaxSimOptimized() }
             ];
 
             // Try to add WASM with improved error handling
@@ -918,7 +918,7 @@
             if (implementation) {
                 log('✅ Using WASM+SIMD for realism test');
             } else {
-                implementation = new MaxSimOptimized({ normalized: scenario.normalized });
+                implementation = new MaxSimOptimized();
                 log('ℹ️ Using JS Optimized for realism test');
             }
 
@@ -1106,7 +1106,7 @@
                 
                 // Pre-warm WASM module to avoid first-run failures
                 try {
-                    const testWasm = new MaxSimWasm({ normalized: false });
+                    const testWasm = new MaxSimWasm();
                     await testWasm.init();
                     setStatus('✅ WASM+SIMD ready! (~4x faster vector operations)', 'success');
                     log('✅ WASM+SIMD pre-warmed and ready');

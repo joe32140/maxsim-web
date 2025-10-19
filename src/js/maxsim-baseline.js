@@ -5,24 +5,45 @@
  * MaxSim algorithm used in ColBERT and late-interaction models.
  *
  * Algorithm:
- * For each query token, find the maximum cosine similarity with all document tokens,
- * then average these maximum similarities across all query tokens.
+ * For each query token, find the maximum similarity with all document tokens,
+ * then sum these maximum similarities: score = Σ max(q_i · d_j)
+ *
+ * Two methods available:
+ * - maxsim(): Official MaxSim (raw sum) - matches ColBERT, pylate-rs, mixedbread-ai
+ * - maxsim_normalized(): Normalized MaxSim (averaged) - for cross-query comparison
  *
  * Performance: ~80 docs/s on realistic workloads (32 query tokens × 2000 doc tokens)
  */
 
 export class MaxSimBaseline {
-  constructor(options = {}) {
-    this.normalized = options.normalized ?? false;
+  constructor() {}
+
+  /**
+   * Official MaxSim: raw sum with cosine similarity
+   * Matches ColBERT, pylate-rs, mixedbread-ai implementations
+   * @param {number[][]} queryEmbedding - Query embeddings (tokens × dimensions)
+   * @param {number[][]} docEmbedding - Document embeddings (tokens × dimensions)
+   * @returns {number} MaxSim score (raw sum)
+   */
+  maxsim(queryEmbedding, docEmbedding) {
+    return this._maxsimImpl(queryEmbedding, docEmbedding, false);
   }
 
   /**
-   * Compute MaxSim score between query and document embeddings
+   * Normalized MaxSim: averaged score for cross-query comparison
    * @param {number[][]} queryEmbedding - Query embeddings (tokens × dimensions)
    * @param {number[][]} docEmbedding - Document embeddings (tokens × dimensions)
-   * @returns {number} MaxSim score
+   * @returns {number} Normalized MaxSim score (averaged)
    */
-  maxsim(queryEmbedding, docEmbedding) {
+  maxsim_normalized(queryEmbedding, docEmbedding) {
+    return this._maxsimImpl(queryEmbedding, docEmbedding, true);
+  }
+
+  /**
+   * Internal implementation shared by both methods
+   * @private
+   */
+  _maxsimImpl(queryEmbedding, docEmbedding, normalized) {
     if (!Array.isArray(queryEmbedding) || queryEmbedding.length === 0 ||
         !Array.isArray(docEmbedding) || docEmbedding.length === 0) {
       return 0;
@@ -45,12 +66,13 @@ export class MaxSimBaseline {
       sumMaxSim += maxSim;
     }
 
-    // Average across query tokens
-    return sumMaxSim / queryEmbedding.length;
+    // Official MaxSim = SUM (no averaging)
+    // Normalized MaxSim = SUM / query_tokens (for cross-query comparison)
+    return normalized ? sumMaxSim / queryEmbedding.length : sumMaxSim;
   }
 
   /**
-   * Batch compute MaxSim scores for multiple documents
+   * Official MaxSim batch: raw sum with cosine similarity
    * @param {number[][]} queryEmbedding - Query embeddings
    * @param {number[][][]} docEmbeddings - Array of document embeddings
    * @returns {number[]} Array of MaxSim scores
@@ -60,6 +82,22 @@ export class MaxSimBaseline {
 
     for (let i = 0; i < docEmbeddings.length; i++) {
       scores[i] = this.maxsim(queryEmbedding, docEmbeddings[i]);
+    }
+
+    return scores;
+  }
+
+  /**
+   * Normalized MaxSim batch: averaged scores for cross-query comparison
+   * @param {number[][]} queryEmbedding - Query embeddings
+   * @param {number[][][]} docEmbeddings - Array of document embeddings
+   * @returns {number[]} Array of normalized MaxSim scores
+   */
+  maxsimBatch_normalized(queryEmbedding, docEmbeddings) {
+    const scores = new Array(docEmbeddings.length);
+
+    for (let i = 0; i < docEmbeddings.length; i++) {
+      scores[i] = this.maxsim_normalized(queryEmbedding, docEmbeddings[i]);
     }
 
     return scores;
@@ -116,10 +154,10 @@ export class MaxSimBaseline {
   getInfo() {
     return {
       name: 'MaxSim Baseline',
-      version: '1.0.0',
+      version: '2.0.0',
       backend: 'pure-js',
       features: ['baseline', 'cosine-similarity'],
-      normalized: this.normalized
+      methods: ['maxsim (official sum)', 'maxsim_normalized (averaged)']
     };
   }
 }

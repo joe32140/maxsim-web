@@ -1,5 +1,13 @@
 /*!
  * MaxSim Web - Ultra-High-Performance WASM Implementation
+ *
+ * MaxSim Algorithm:
+ * - For each query token, find the maximum similarity with all document tokens
+ * - Sum these maximum similarities: score = Σ max(q_i · d_j) for all query tokens i
+ *
+ * Two variants available:
+ * - maxsim(): Official MaxSim (raw sum, cosine similarity) - matches ColBERT, pylate-rs, mixedbread-ai
+ * - maxsim_normalized(): Normalized MaxSim (averaged, dot product) - for pre-normalized embeddings and cross-query comparison
  */
 
 use wasm_bindgen::prelude::*;
@@ -8,19 +16,17 @@ use wasm_bindgen::prelude::*;
 use std::arch::wasm32::*;
 
 #[wasm_bindgen]
-pub struct MaxSimWasm {
-    normalized: bool,
-}
+pub struct MaxSimWasm {}
 
 #[wasm_bindgen]
 impl MaxSimWasm {
     #[wasm_bindgen(constructor)]
-    pub fn new(normalized: bool) -> MaxSimWasm {
-        MaxSimWasm { 
-            normalized,
-        }
+    pub fn new() -> MaxSimWasm {
+        MaxSimWasm {}
     }
 
+    /// Official MaxSim: raw sum with cosine similarity
+    /// Matches ColBERT, pylate-rs, mixedbread-ai implementations
     #[wasm_bindgen]
     pub fn maxsim_single(
         &self,
@@ -29,6 +35,33 @@ impl MaxSimWasm {
         doc_flat: &[f32],
         doc_tokens: usize,
         embedding_dim: usize,
+    ) -> f32 {
+        self.maxsim_single_impl(query_flat, query_tokens, doc_flat, doc_tokens, embedding_dim, false)
+    }
+
+    /// Normalized MaxSim: averaged with dot product (for pre-normalized embeddings)
+    /// Better for cross-query comparison
+    #[wasm_bindgen]
+    pub fn maxsim_single_normalized(
+        &self,
+        query_flat: &[f32],
+        query_tokens: usize,
+        doc_flat: &[f32],
+        doc_tokens: usize,
+        embedding_dim: usize,
+    ) -> f32 {
+        self.maxsim_single_impl(query_flat, query_tokens, doc_flat, doc_tokens, embedding_dim, true)
+    }
+
+    // Internal implementation shared by both methods
+    fn maxsim_single_impl(
+        &self,
+        query_flat: &[f32],
+        query_tokens: usize,
+        doc_flat: &[f32],
+        doc_tokens: usize,
+        embedding_dim: usize,
+        normalized: bool,
     ) -> f32 {
         if query_tokens == 0 || doc_tokens == 0 {
             return 0.0;
@@ -43,7 +76,7 @@ impl MaxSimWasm {
             query_tokens,
             doc_tokens,
             embedding_dim,
-            self.normalized,
+            normalized,
         );
 
         let mut sum_max_sim = 0.0;
@@ -53,9 +86,16 @@ impl MaxSimWasm {
             sum_max_sim += simd_max(&similarities[row_start..row_end]);
         }
 
-        sum_max_sim / query_tokens as f32
+        // Official MaxSim = SUM (no averaging)
+        // Normalized MaxSim = SUM / query_tokens (for cross-query comparison)
+        if normalized {
+            sum_max_sim / query_tokens as f32
+        } else {
+            sum_max_sim
+        }
     }
 
+    /// Official MaxSim batch: raw sum with cosine similarity
     #[wasm_bindgen]
     pub fn maxsim_batch(
         &self,
@@ -65,6 +105,32 @@ impl MaxSimWasm {
         doc_tokens: &[usize],
         embedding_dim: usize,
     ) -> Vec<f32> {
+        self.maxsim_batch_impl(query_flat, query_tokens, doc_flat, doc_tokens, embedding_dim, false)
+    }
+
+    /// Normalized MaxSim batch: averaged with dot product
+    #[wasm_bindgen]
+    pub fn maxsim_batch_normalized(
+        &self,
+        query_flat: &[f32],
+        query_tokens: usize,
+        doc_flat: &[f32],
+        doc_tokens: &[usize],
+        embedding_dim: usize,
+    ) -> Vec<f32> {
+        self.maxsim_batch_impl(query_flat, query_tokens, doc_flat, doc_tokens, embedding_dim, true)
+    }
+
+    // Internal implementation
+    fn maxsim_batch_impl(
+        &self,
+        query_flat: &[f32],
+        query_tokens: usize,
+        doc_flat: &[f32],
+        doc_tokens: &[usize],
+        embedding_dim: usize,
+        normalized: bool,
+    ) -> Vec<f32> {
         let num_docs = doc_tokens.len();
         let mut scores = vec![0.0; num_docs];
         let mut doc_offset = 0;
@@ -73,12 +139,13 @@ impl MaxSimWasm {
             let doc_end = doc_offset + doc_token_count * embedding_dim;
             let doc_slice = &doc_flat[doc_offset..doc_end];
 
-            scores[doc_idx] = self.maxsim_single(
+            scores[doc_idx] = self.maxsim_single_impl(
                 query_flat,
                 query_tokens,
                 doc_slice,
                 doc_token_count,
                 embedding_dim,
+                normalized,
             );
 
             doc_offset = doc_end;
@@ -87,6 +154,7 @@ impl MaxSimWasm {
         scores
     }
 
+    /// Official MaxSim batch uniform: raw sum with cosine similarity
     #[wasm_bindgen]
     pub fn maxsim_batch_uniform(
         &self,
@@ -97,13 +165,41 @@ impl MaxSimWasm {
         doc_tokens: usize,
         embedding_dim: usize,
     ) -> Vec<f32> {
+        self.maxsim_batch_uniform_impl(query_flat, query_tokens, doc_flat, num_docs, doc_tokens, embedding_dim, false)
+    }
+
+    /// Normalized MaxSim batch uniform: averaged with dot product
+    #[wasm_bindgen]
+    pub fn maxsim_batch_uniform_normalized(
+        &self,
+        query_flat: &[f32],
+        query_tokens: usize,
+        doc_flat: &[f32],
+        num_docs: usize,
+        doc_tokens: usize,
+        embedding_dim: usize,
+    ) -> Vec<f32> {
+        self.maxsim_batch_uniform_impl(query_flat, query_tokens, doc_flat, num_docs, doc_tokens, embedding_dim, true)
+    }
+
+    // Internal implementation
+    fn maxsim_batch_uniform_impl(
+        &self,
+        query_flat: &[f32],
+        query_tokens: usize,
+        doc_flat: &[f32],
+        num_docs: usize,
+        doc_tokens: usize,
+        embedding_dim: usize,
+        normalized: bool,
+    ) -> Vec<f32> {
         if num_docs == 0 || query_tokens == 0 || doc_tokens == 0 {
             return vec![0.0; num_docs];
         }
 
         let mut scores = vec![0.0; num_docs];
         let block_size = 8;
-        
+
         for doc_block_start in (0..num_docs).step_by(block_size) {
             let doc_block_end = (doc_block_start + block_size).min(num_docs);
             let actual_block_size = doc_block_end - doc_block_start;
@@ -122,13 +218,13 @@ impl MaxSimWasm {
                         let doc_token_start = doc_start + d_idx * embedding_dim;
                         let doc_token = &doc_flat[doc_token_start..doc_token_start + embedding_dim];
 
-                        let similarity = if self.normalized {
+                        let similarity = if normalized {
                             dot_product(query_token, doc_token)
                         } else {
                             cosine_similarity(query_token, doc_token)
                         };
 
-                        let sim_idx = q_idx * (actual_block_size * doc_tokens) + 
+                        let sim_idx = q_idx * (actual_block_size * doc_tokens) +
                                      block_doc_idx * doc_tokens + d_idx;
                         block_similarities[sim_idx] = similarity;
                     }
@@ -140,19 +236,26 @@ impl MaxSimWasm {
                 let mut sum_max_sim = 0.0;
 
                 for q_idx in 0..query_tokens {
-                    let row_start = q_idx * (actual_block_size * doc_tokens) + 
+                    let row_start = q_idx * (actual_block_size * doc_tokens) +
                                    block_doc_idx * doc_tokens;
                     let row_end = row_start + doc_tokens;
                     sum_max_sim += simd_max(&block_similarities[row_start..row_end]);
                 }
 
-                scores[global_doc_idx] = sum_max_sim / query_tokens as f32;
+                // Official MaxSim = SUM (no averaging)
+                // Normalized MaxSim = SUM / query_tokens (for cross-query comparison)
+                scores[global_doc_idx] = if normalized {
+                    sum_max_sim / query_tokens as f32
+                } else {
+                    sum_max_sim
+                };
             }
         }
 
         scores
     }
 
+    /// Official MaxSim batch zero-copy: raw sum with cosine similarity
     #[wasm_bindgen]
     pub fn maxsim_batch_zero_copy(
         &mut self,
@@ -163,15 +266,43 @@ impl MaxSimWasm {
         num_docs: usize,
         embedding_dim: usize,
     ) -> Vec<f32> {
+        self.maxsim_batch_zero_copy_impl(query_ptr, query_tokens, doc_ptr, doc_tokens_ptr, num_docs, embedding_dim, false)
+    }
+
+    /// Normalized MaxSim batch zero-copy: averaged with dot product
+    #[wasm_bindgen]
+    pub fn maxsim_batch_zero_copy_normalized(
+        &mut self,
+        query_ptr: *const f32,
+        query_tokens: usize,
+        doc_ptr: *const f32,
+        doc_tokens_ptr: *const usize,
+        num_docs: usize,
+        embedding_dim: usize,
+    ) -> Vec<f32> {
+        self.maxsim_batch_zero_copy_impl(query_ptr, query_tokens, doc_ptr, doc_tokens_ptr, num_docs, embedding_dim, true)
+    }
+
+    // Internal implementation
+    fn maxsim_batch_zero_copy_impl(
+        &mut self,
+        query_ptr: *const f32,
+        query_tokens: usize,
+        doc_ptr: *const f32,
+        doc_tokens_ptr: *const usize,
+        num_docs: usize,
+        embedding_dim: usize,
+        normalized: bool,
+    ) -> Vec<f32> {
         if num_docs == 0 || query_tokens == 0 {
             return vec![0.0; num_docs];
         }
 
-        let query_slice = unsafe { 
-            std::slice::from_raw_parts(query_ptr, query_tokens * embedding_dim) 
+        let query_slice = unsafe {
+            std::slice::from_raw_parts(query_ptr, query_tokens * embedding_dim)
         };
-        let doc_tokens_slice = unsafe { 
-            std::slice::from_raw_parts(doc_tokens_ptr, num_docs) 
+        let doc_tokens_slice = unsafe {
+            std::slice::from_raw_parts(doc_tokens_ptr, num_docs)
         };
 
         let mut scores = vec![0.0; num_docs];
@@ -180,17 +311,18 @@ impl MaxSimWasm {
         for (doc_idx, &doc_token_count) in doc_tokens_slice.iter().enumerate() {
             let doc_slice = unsafe {
                 std::slice::from_raw_parts(
-                    doc_ptr.add(doc_offset), 
+                    doc_ptr.add(doc_offset),
                     doc_token_count * embedding_dim
                 )
             };
 
-            scores[doc_idx] = self.maxsim_single(
+            scores[doc_idx] = self.maxsim_single_impl(
                 query_slice,
                 query_tokens,
                 doc_slice,
                 doc_token_count,
                 embedding_dim,
+                normalized,
             );
 
             doc_offset += doc_token_count * embedding_dim;
@@ -202,8 +334,7 @@ impl MaxSimWasm {
     #[wasm_bindgen]
     pub fn get_info(&self) -> String {
         format!(
-            "MaxSim WASM v0.4.0 (normalized: {}, SIMD: {}, adaptive_blocking: true)",
-            self.normalized,
+            "MaxSim WASM v0.5.0 (SIMD: {}, adaptive_blocking: true, methods: maxsim + maxsim_normalized)",
             cfg!(target_feature = "simd128")
         )
     }
@@ -518,11 +649,22 @@ mod tests {
     }
 
     #[test]
-    fn test_maxsim_single() {
-        let maxsim = MaxSimWasm::new(true);
+    fn test_maxsim_single_official() {
+        let maxsim = MaxSimWasm::new();
         let query = vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0];
         let doc = vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
         let score = maxsim.maxsim_single(&query, 2, &doc, 3, 3);
-        assert!(score > 0.0 && score <= 1.0);
+        // Official MaxSim: raw sum, should be >= 0
+        assert!(score >= 0.0);
+    }
+
+    #[test]
+    fn test_maxsim_single_normalized() {
+        let maxsim = MaxSimWasm::new();
+        let query = vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0];
+        let doc = vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
+        let score = maxsim.maxsim_single_normalized(&query, 2, &doc, 3, 3);
+        // Normalized MaxSim: averaged, should be between -1 and 1
+        assert!(score >= -1.0 && score <= 1.0);
     }
 }

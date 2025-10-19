@@ -29,30 +29,47 @@ describe('MaxSim Implementations', () => {
       let maxsim;
 
       beforeEach(() => {
-        maxsim = new Class({ normalized: true });
+        maxsim = new Class();
       });
 
-      test('should compute correct MaxSim score', () => {
+      test('should compute correct MaxSim score (official)', () => {
         const score = maxsim.maxsim(queryEmbedding, docEmbedding);
+        expect(score).toBeGreaterThan(0);
+        // Official MaxSim is a sum, can be > 1
+      });
+
+      test('should compute correct normalized MaxSim score', () => {
+        const score = maxsim.maxsim_normalized(queryEmbedding, docEmbedding);
         expect(score).toBeGreaterThan(0);
         expect(score).toBeLessThanOrEqual(1);
       });
 
-      test('should handle identical embeddings', () => {
-        const score = maxsim.maxsim(queryEmbedding, queryEmbedding);
+      test('should handle identical embeddings (normalized)', () => {
+        const score = maxsim.maxsim_normalized(queryEmbedding, queryEmbedding);
         expect(score).toBeCloseTo(1.0, 5);
       });
 
-      test('should handle orthogonal vectors', () => {
+      test('should handle orthogonal vectors (normalized)', () => {
         const query = [[1.0, 0.0, 0.0]];
         const doc = [[0.0, 1.0, 0.0]];
-        const score = maxsim.maxsim(query, doc);
+        const score = maxsim.maxsim_normalized(query, doc);
         expect(score).toBeCloseTo(0.0, 5);
       });
 
-      test('should handle batch computation', () => {
+      test('should handle batch computation (official)', () => {
         const docs = [docEmbedding, docEmbedding, docEmbedding];
         const scores = maxsim.maxsimBatch(queryEmbedding, docs);
+
+        expect(scores).toHaveLength(3);
+        scores.forEach(score => {
+          expect(score).toBeGreaterThan(0);
+          // Official MaxSim is a sum, can be > 1
+        });
+      });
+
+      test('should handle batch computation (normalized)', () => {
+        const docs = [docEmbedding, docEmbedding, docEmbedding];
+        const scores = maxsim.maxsimBatch_normalized(queryEmbedding, docs);
 
         expect(scores).toHaveLength(3);
         scores.forEach(score => {
@@ -82,32 +99,100 @@ describe('MaxSim Implementations', () => {
   }
 
   describe('Implementation Consistency', () => {
+    test('baseline and optimized should produce same results (official)', () => {
+      const baseline = new MaxSimBaseline();
+      const optimized = new MaxSimOptimized();
+
+      const score1 = baseline.maxsim(queryEmbedding, docEmbedding);
+      const score2 = optimized.maxsim(queryEmbedding, docEmbedding);
+
+      expect(score1).toBeCloseTo(score2, 10);
+    });
+
     test('baseline and optimized should produce same results (normalized)', () => {
-      const baseline = new MaxSimBaseline({ normalized: true });
-      const optimized = new MaxSimOptimized({ normalized: true });
+      const baseline = new MaxSimBaseline();
+      const optimized = new MaxSimOptimized();
 
-      const score1 = baseline.maxsim(queryEmbedding, docEmbedding);
-      const score2 = optimized.maxsim(queryEmbedding, docEmbedding);
-
-      expect(score1).toBeCloseTo(score2, 10);
-    });
-
-    test('baseline and optimized should produce same results (unnormalized)', () => {
-      const baseline = new MaxSimBaseline({ normalized: false });
-      const optimized = new MaxSimOptimized({ normalized: false });
-
-      const score1 = baseline.maxsim(queryEmbedding, docEmbedding);
-      const score2 = optimized.maxsim(queryEmbedding, docEmbedding);
+      const score1 = baseline.maxsim_normalized(queryEmbedding, docEmbedding);
+      const score2 = optimized.maxsim_normalized(queryEmbedding, docEmbedding);
 
       expect(score1).toBeCloseTo(score2, 10);
     });
+  });
 
+  describe('Normalization Mode Tests', () => {
+    test('normalized method should return averaged scores', () => {
+      const maxsim = new MaxSimBaseline();
 
+      // Query with 2 tokens, each finding perfect match
+      const query = [[1.0, 0.0], [0.0, 1.0]];
+      const doc = [[1.0, 0.0], [0.0, 1.0]];
+
+      const score = maxsim.maxsim_normalized(query, doc);
+      // Normalized: (1.0 + 1.0) / 2 = 1.0
+      expect(score).toBeCloseTo(1.0, 10);
+    });
+
+    test('official method should return raw sum', () => {
+      const maxsim = new MaxSimBaseline();
+
+      // Query with 2 tokens, each finding perfect match
+      const query = [[1.0, 0.0], [0.0, 1.0]];
+      const doc = [[1.0, 0.0], [0.0, 1.0]];
+
+      const score = maxsim.maxsim(query, doc);
+      // Official MaxSim: 1.0 + 1.0 = 2.0 (raw sum)
+      expect(score).toBeCloseTo(2.0, 10);
+    });
+
+    test('normalized score should be independent of query length', () => {
+      const maxsim = new MaxSimBaseline();
+
+      const doc = [[1.0, 0.0], [0.0, 1.0]];
+
+      // 2-token query
+      const query2 = [[1.0, 0.0], [0.0, 1.0]];
+      const score2 = maxsim.maxsim_normalized(query2, doc);
+
+      // 4-token query (duplicate tokens)
+      const query4 = [[1.0, 0.0], [0.0, 1.0], [1.0, 0.0], [0.0, 1.0]];
+      const score4 = maxsim.maxsim_normalized(query4, doc);
+
+      // Both should be 1.0 when normalized
+      expect(score2).toBeCloseTo(1.0, 10);
+      expect(score4).toBeCloseTo(1.0, 10);
+    });
+
+    test('official method score should scale with query length', () => {
+      const maxsim = new MaxSimBaseline();
+
+      const doc = [[1.0, 0.0], [0.0, 1.0]];
+
+      // 2-token query
+      const query2 = [[1.0, 0.0], [0.0, 1.0]];
+      const score2 = maxsim.maxsim(query2, doc);
+
+      // 4-token query (duplicate tokens)
+      const query4 = [[1.0, 0.0], [0.0, 1.0], [1.0, 0.0], [0.0, 1.0]];
+      const score4 = maxsim.maxsim(query4, doc);
+
+      // Official mode: score should double with double query tokens
+      expect(score2).toBeCloseTo(2.0, 10);
+      expect(score4).toBeCloseTo(4.0, 10);
+    });
+
+    test('getInfo should report available methods', () => {
+      const impl = new MaxSimBaseline();
+      const info = impl.getInfo();
+
+      expect(info.methods).toBeDefined();
+      expect(info.methods.length).toBe(2);
+    });
   });
 
   describe('MaxSim Correctness Tests', () => {
     test('should compute exact MaxSim for known vectors', () => {
-      const maxsim = new MaxSimOptimized({ normalized: true });
+      const maxsim = new MaxSimOptimized();
       
       // Known test case: query has 2 tokens, doc has 3 tokens
       // Query token 1: [1, 0] should match perfectly with doc token 1: [1, 0] (similarity = 1.0)
@@ -115,40 +200,52 @@ describe('MaxSim Implementations', () => {
       // Expected MaxSim = (1.0 + 1.0) / 2 = 1.0
       const query = [[1.0, 0.0], [0.0, 1.0]];
       const doc = [[1.0, 0.0], [0.0, 1.0], [0.5, 0.5]];
-      
-      const score = maxsim.maxsim(query, doc);
+
+      const score = maxsim.maxsim_normalized(query, doc);
       expect(score).toBeCloseTo(1.0, 10);
     });
 
     test('should compute correct MaxSim for partial matches', () => {
-      const maxsim = new MaxSimOptimized({ normalized: true });
-      
+      const maxsim = new MaxSimOptimized();
+
       // Query token 1: [1, 0] matches doc token 1: [1, 0] perfectly (similarity = 1.0)
       // Query token 2: [0, 1] matches doc token 2: [0, 1] perfectly (similarity = 1.0)
       // Query token 3: [1, 1]/√2 best matches either [1,0] or [0,1] with similarity 1/√2
       const query = [[1.0, 0.0], [0.0, 1.0], [1/Math.sqrt(2), 1/Math.sqrt(2)]];
       const doc = [[1.0, 0.0], [0.0, 1.0]];
-      
-      const score = maxsim.maxsim(query, doc);
+
+      // Test normalized version
+      const normalizedScore = maxsim.maxsim_normalized(query, doc);
       // Expected: (1.0 + 1.0 + 1/√2) / 3 = (2 + 1/√2) / 3 ≈ 0.9023689
-      expect(score).toBeCloseTo(0.9024, 3);
+      expect(normalizedScore).toBeCloseTo(0.9024, 3);
+
+      // Test official version (raw sum)
+      const officialScore = maxsim.maxsim(query, doc);
+      // Expected: 1.0 + 1.0 + 1/√2 ≈ 2.707
+      expect(officialScore).toBeCloseTo(2.707, 3);
     });
 
     test('should handle orthogonal vectors correctly', () => {
-      const maxsim = new MaxSimOptimized({ normalized: true });
-      
+      const maxsim = new MaxSimOptimized();
+
       // All query tokens are orthogonal to all doc tokens
       const query = [[1.0, 0.0], [0.0, 1.0]];
       const doc = [[0.0, 1.0], [1.0, 0.0]]; // Swapped to create orthogonality
-      
-      const score = maxsim.maxsim(query, doc);
-      // Query [1,0] best matches [1,0] with similarity 1.0
-      // Query [0,1] best matches [0,1] with similarity 1.0
-      expect(score).toBeCloseTo(1.0, 10);
+
+      // Wait, these aren't orthogonal! Query [1,0] matches doc [1,0] perfectly
+      // Query [0,1] best matches doc [0,1] with similarity 1.0
+
+      // Test normalized version
+      const normalizedScore = maxsim.maxsim_normalized(query, doc);
+      expect(normalizedScore).toBeCloseTo(1.0, 10);
+
+      // Test official version (raw sum)
+      const officialScore = maxsim.maxsim(query, doc);
+      expect(officialScore).toBeCloseTo(2.0, 10); // 1.0 + 1.0 = 2.0
     });
 
     test('should compute correct MaxSim with mixed similarities', () => {
-      const maxsim = new MaxSimOptimized({ normalized: true });
+      const maxsim = new MaxSimOptimized();
       
       // Create a scenario with known cosine similarities
       const query = [[1.0, 0.0, 0.0]]; // Single query token
@@ -168,7 +265,7 @@ describe('MaxSim Implementations', () => {
     });
 
     test('should handle unnormalized vectors correctly', () => {
-      const maxsim = new MaxSimOptimized({ normalized: false });
+      const maxsim = new MaxSimOptimized();
       
       // Test with unnormalized vectors
       const query = [[2.0, 0.0]]; // magnitude = 2
@@ -180,7 +277,7 @@ describe('MaxSim Implementations', () => {
     });
 
     test('should compute batch results correctly', () => {
-      const maxsim = new MaxSimOptimized({ normalized: true });
+      const maxsim = new MaxSimOptimized();
       
       const query = [[1.0, 0.0]];
       const docs = [
@@ -197,34 +294,40 @@ describe('MaxSim Implementations', () => {
     });
 
     test('should handle multi-token queries correctly', () => {
-      const maxsim = new MaxSimOptimized({ normalized: true });
-      
+      const maxsim = new MaxSimOptimized();
+
       // 3-token query, each token should find its best match
       const query = [
         [1.0, 0.0],  // Should match [1,0] with score 1.0
-        [0.0, 1.0],  // Should match [0,1] with score 1.0  
+        [0.0, 1.0],  // Should match [0,1] with score 1.0
         [0.5, 0.5]   // Should match [0.5,0.5] with score 1.0
       ];
-      
+
       // Normalize the last query token
       let norm = Math.sqrt(0.5 * 0.5 + 0.5 * 0.5);
       query[2] = [0.5/norm, 0.5/norm];
-      
+
       const doc = [
         [1.0, 0.0],
         [0.0, 1.0],
         [0.5/norm, 0.5/norm]  // Same normalization
       ];
-      
-      const score = maxsim.maxsim(query, doc);
+
+      // Test normalized version
+      const normalizedScore = maxsim.maxsim_normalized(query, doc);
       // Each query token finds perfect match: (1.0 + 1.0 + 1.0) / 3 = 1.0
-      expect(score).toBeCloseTo(1.0, 10);
+      expect(normalizedScore).toBeCloseTo(1.0, 10);
+
+      // Test official version (raw sum)
+      const officialScore = maxsim.maxsim(query, doc);
+      // Each query token finds perfect match: 1.0 + 1.0 + 1.0 = 3.0
+      expect(officialScore).toBeCloseTo(3.0, 10);
     });
   });
 
   describe('Edge Cases', () => {
     test('should handle single token query', () => {
-      const maxsim = new MaxSimOptimized({ normalized: true });
+      const maxsim = new MaxSimOptimized();
       const query = [[1.0, 0.0, 0.0]];
       const score = maxsim.maxsim(query, docEmbedding);
 
@@ -233,7 +336,7 @@ describe('MaxSim Implementations', () => {
     });
 
     test('should handle single token document', () => {
-      const maxsim = new MaxSimOptimized({ normalized: true });
+      const maxsim = new MaxSimOptimized();
       const doc = [[1.0, 0.0, 0.0]];
       const score = maxsim.maxsim(queryEmbedding, doc);
 
@@ -242,7 +345,7 @@ describe('MaxSim Implementations', () => {
     });
 
     test('should handle large embeddings', () => {
-      const maxsim = new MaxSimOptimized({ normalized: true });
+      const maxsim = new MaxSimOptimized();
 
       // Generate large embeddings (unnormalized)
       const largeQueryRaw = Array(100).fill(0).map(() =>
@@ -252,14 +355,19 @@ describe('MaxSim Implementations', () => {
         Array(128).fill(0).map(() => Math.random())
       );
 
-      // Normalize them since we set normalized: true
+      // Normalize them for the normalized method
       const largeQuery = MaxSimOptimized.normalize(largeQueryRaw);
       const largeDoc = MaxSimOptimized.normalize(largeDocRaw);
 
-      const score = maxsim.maxsim(largeQuery, largeDoc);
+      // Test normalized version
+      const normalizedScore = maxsim.maxsim_normalized(largeQuery, largeDoc);
+      expect(normalizedScore).toBeGreaterThan(-1);
+      expect(normalizedScore).toBeLessThanOrEqual(1);
 
-      expect(score).toBeGreaterThan(-1);
-      expect(score).toBeLessThanOrEqual(1);
+      // Test official version
+      const officialScore = maxsim.maxsim(largeQuery, largeDoc);
+      expect(officialScore).toBeGreaterThan(0);
+      // Official MaxSim is a sum over 100 query tokens, can be much > 1
     });
   });
 
@@ -269,7 +377,7 @@ describe('MaxSim Implementations', () => {
     beforeAll(async () => {
       // Only run WASM tests if supported
       if (await MaxSimWasm.isSupported()) {
-        wasmImpl = new MaxSimWasm({ normalized: true });
+        wasmImpl = new MaxSimWasm();
         try {
           await wasmImpl.init();
         } catch (error) {
@@ -285,8 +393,8 @@ describe('MaxSim Implementations', () => {
         return;
       }
 
-      const baseline = new MaxSimBaseline({ normalized: true });
-      const optimized = new MaxSimOptimized({ normalized: true });
+      const baseline = new MaxSimBaseline();
+      const optimized = new MaxSimOptimized();
 
       // Test with known vectors
       const query = [[1.0, 0.0], [0.0, 1.0]];
@@ -310,7 +418,7 @@ describe('MaxSim Implementations', () => {
         return;
       }
 
-      const optimized = new MaxSimOptimized({ normalized: true });
+      const optimized = new MaxSimOptimized();
 
       const query = [[1.0, 0.0]];
       const docs = [
@@ -349,7 +457,7 @@ describe('MaxSim Implementations', () => {
         return;
       }
 
-      const optimized = new MaxSimOptimized({ normalized: true });
+      const optimized = new MaxSimOptimized();
 
       // Test with different dimensions
       const dimensions = [64, 128, 256, 384];
@@ -372,7 +480,7 @@ describe('MaxSim Implementations', () => {
         return;
       }
 
-      const optimized = new MaxSimOptimized({ normalized: true });
+      const optimized = new MaxSimOptimized();
 
       // Create a larger test case
       const query = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];

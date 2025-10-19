@@ -1,25 +1,48 @@
 /**
  * MaxSim Optimized Implementation
  *
+ * Two methods available:
+ * - maxsim(): Official MaxSim (raw sum, cosine similarity) - matches ColBERT, pylate-rs, mixedbread-ai
+ * - maxsim_normalized(): Normalized MaxSim (averaged, dot product) - for pre-normalized embeddings and cross-query comparison
+ *
  * Optimizations over baseline:
- * 1. Pre-normalized embeddings (skip magnitude calculations) - 2x speedup
- * 2. Dot product for normalized vectors instead of cosine similarity
+ * 1. Dot product for pre-normalized vectors (2x speedup for normalized mode)
+ * 2. Unrolled loops for common embedding dimensions
+ * 3. Typed arrays for better performance
  *
  * Performance: ~160 docs/s on realistic workloads (2x baseline)
  */
 
 export class MaxSimOptimized {
-  constructor(options = {}) {
-    this.normalized = options.normalized ?? false;
+  constructor() {}
+
+  /**
+   * Official MaxSim: raw sum with cosine similarity
+   * Matches ColBERT, pylate-rs, mixedbread-ai implementations
+   * @param {number[][]} queryEmbedding - Query embeddings (tokens × dimensions)
+   * @param {number[][]} docEmbedding - Document embeddings (tokens × dimensions)
+   * @returns {number} MaxSim score (raw sum)
+   */
+  maxsim(queryEmbedding, docEmbedding) {
+    return this._maxsimImpl(queryEmbedding, docEmbedding, false);
   }
 
   /**
-   * Compute MaxSim score between query and document embeddings
+   * Normalized MaxSim: averaged score with dot product (for pre-normalized embeddings)
+   * Better for cross-query comparison
    * @param {number[][]} queryEmbedding - Query embeddings (tokens × dimensions)
    * @param {number[][]} docEmbedding - Document embeddings (tokens × dimensions)
-   * @returns {number} MaxSim score
+   * @returns {number} Normalized MaxSim score (averaged)
    */
-  maxsim(queryEmbedding, docEmbedding) {
+  maxsim_normalized(queryEmbedding, docEmbedding) {
+    return this._maxsimImpl(queryEmbedding, docEmbedding, true);
+  }
+
+  /**
+   * Internal implementation shared by both methods
+   * @private
+   */
+  _maxsimImpl(queryEmbedding, docEmbedding, normalized) {
     if (!Array.isArray(queryEmbedding) || queryEmbedding.length === 0 ||
         !Array.isArray(docEmbedding) || docEmbedding.length === 0) {
       return 0;
@@ -36,8 +59,8 @@ export class MaxSimOptimized {
       for (let j = 0; j < docEmbedding.length; j++) {
         const docToken = docEmbedding[j];
 
-        // Use dot product if normalized, else cosine similarity
-        const similarity = this.normalized
+        // Use dot product if normalized (assumes pre-normalized embeddings), else cosine similarity
+        const similarity = normalized
           ? this.dotProduct(queryToken, docToken)
           : this.cosineSimilarity(queryToken, docToken);
 
@@ -47,12 +70,13 @@ export class MaxSimOptimized {
       sumMaxSim += maxSim;
     }
 
-    // Average across query tokens
-    return sumMaxSim / queryEmbedding.length;
+    // Official MaxSim = SUM (no averaging)
+    // Normalized MaxSim = SUM / query_tokens (for cross-query comparison)
+    return normalized ? sumMaxSim / queryEmbedding.length : sumMaxSim;
   }
 
   /**
-   * Batch compute MaxSim scores for multiple documents
+   * Official MaxSim batch: raw sum with cosine similarity
    * @param {number[][]} queryEmbedding - Query embeddings
    * @param {number[][][]} docEmbeddings - Array of document embeddings
    * @returns {number[]} Array of MaxSim scores
@@ -62,6 +86,22 @@ export class MaxSimOptimized {
 
     for (let i = 0; i < docEmbeddings.length; i++) {
       scores[i] = this.maxsim(queryEmbedding, docEmbeddings[i]);
+    }
+
+    return scores;
+  }
+
+  /**
+   * Normalized MaxSim batch: averaged scores for cross-query comparison
+   * @param {number[][]} queryEmbedding - Query embeddings
+   * @param {number[][][]} docEmbeddings - Array of document embeddings
+   * @returns {number[]} Array of normalized MaxSim scores
+   */
+  maxsimBatch_normalized(queryEmbedding, docEmbeddings) {
+    const scores = new Array(docEmbeddings.length);
+
+    for (let i = 0; i < docEmbeddings.length; i++) {
+      scores[i] = this.maxsim_normalized(queryEmbedding, docEmbeddings[i]);
     }
 
     return scores;
@@ -236,10 +276,10 @@ export class MaxSimOptimized {
   getInfo() {
     return {
       name: 'MaxSim Optimized',
-      version: '1.1.0',
+      version: '2.0.0',
       backend: 'js-optimized',
-      features: ['normalized-mode', 'dot-product', 'auto-selection', 'unrolled-loops', 'typed-arrays'],
-      normalized: this.normalized
+      features: ['dot-product', 'auto-selection', 'unrolled-loops', 'typed-arrays'],
+      methods: ['maxsim (official sum)', 'maxsim_normalized (averaged)']
     };
   }
 }

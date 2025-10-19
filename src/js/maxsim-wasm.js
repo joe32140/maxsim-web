@@ -5,14 +5,21 @@
  * High-performance implementation using WebAssembly with SIMD instructions.
  * Expected performance: 10x faster than pure JavaScript baseline.
  *
+ * Algorithm:
+ * For each query token, find the maximum similarity with all document tokens,
+ * then sum these maximum similarities: score = Σ max(q_i · d_j)
+ *
+ * Two methods available:
+ * - maxsim(): Official MaxSim (raw sum, cosine similarity) - matches ColBERT, pylate-rs, mixedbread-ai
+ * - maxsim_normalized(): Normalized MaxSim (averaged, dot product) - for pre-normalized embeddings and cross-query comparison
+ *
  * Requirements:
  * - Browser with WASM SIMD support (Chrome 91+, Firefox 89+, Safari 16.4+)
  * - Compiled WASM module in dist/wasm/
  */
 
 export class MaxSimWasm {
-    constructor(options = {}) {
-        this.normalized = options.normalized ?? false;
+    constructor() {
         this.wasmInstance = null;
         this.isInitialized = false;
 
@@ -50,7 +57,7 @@ export class MaxSimWasm {
                 await wasmModule.default();
 
                 // Create instance
-                this.wasmInstance = new wasmModule.MaxSimWasm(this.normalized);
+                this.wasmInstance = new wasmModule.MaxSimWasm();
                 this.isInitialized = true;
 
                 // Check SIMD support and log clean status
@@ -77,10 +84,11 @@ export class MaxSimWasm {
     }
 
     /**
-     * Compute MaxSim score between query and document
+     * Official MaxSim: raw sum with cosine similarity
+     * Matches ColBERT, pylate-rs, mixedbread-ai implementations
      * @param {number[][]|Float32Array[]} queryEmbedding - Query embeddings
      * @param {number[][]|Float32Array[]} docEmbedding - Document embeddings
-     * @returns {number} MaxSim score
+     * @returns {number} MaxSim score (raw sum)
      */
     maxsim(queryEmbedding, docEmbedding) {
         if (!this.isInitialized) {
@@ -96,6 +104,34 @@ export class MaxSimWasm {
         const { docFlat, docTokens } = this.flattenEmbedding(docEmbedding);
 
         return this.wasmInstance.maxsim_single(
+            queryFlat,
+            queryTokens,
+            docFlat,
+            docTokens,
+            embeddingDim
+        );
+    }
+
+    /**
+     * Normalized MaxSim: averaged score for cross-query comparison
+     * @param {number[][]|Float32Array[]} queryEmbedding - Query embeddings
+     * @param {number[][]|Float32Array[]} docEmbedding - Document embeddings
+     * @returns {number} Normalized MaxSim score (averaged)
+     */
+    maxsim_normalized(queryEmbedding, docEmbedding) {
+        if (!this.isInitialized) {
+            throw new Error('WASM not initialized. Call init() first.');
+        }
+
+        if (!queryEmbedding || queryEmbedding.length === 0 ||
+            !docEmbedding || docEmbedding.length === 0) {
+            return 0;
+        }
+
+        const { queryFlat, queryTokens, embeddingDim } = this.flattenEmbedding(queryEmbedding);
+        const { docFlat, docTokens } = this.flattenEmbedding(docEmbedding);
+
+        return this.wasmInstance.maxsim_single_normalized(
             queryFlat,
             queryTokens,
             docFlat,
@@ -217,6 +253,121 @@ export class MaxSimWasm {
             const docStart = queryTokens * embeddingDim;
 
             const scores = this.wasmInstance.maxsim_batch(
+                buffer.subarray(queryStart, docStart),
+                queryTokens,
+                buffer.subarray(docStart),
+                new Uint32Array(docTokenCounts),
+                embeddingDim
+            );
+
+            return new Float32Array(scores);
+        }
+    }
+
+    /**
+     * Normalized MaxSim batch: averaged scores for cross-query comparison
+     * @param {number[][]|Float32Array[]} queryEmbedding - Query embeddings
+     * @param {Array<number[][]|Float32Array[]>} docEmbeddings - Array of document embeddings
+     * @returns {Float32Array} Array of normalized MaxSim scores
+     */
+    maxsimBatch_normalized(queryEmbedding, docEmbeddings) {
+        if (!this.isInitialized) {
+            throw new Error('WASM not initialized. Call init() first.');
+        }
+
+        if (!queryEmbedding || queryEmbedding.length === 0 || docEmbeddings.length === 0) {
+            return new Float32Array(docEmbeddings.length);
+        }
+
+        const queryTokens = queryEmbedding.length;
+        const embeddingDim = queryEmbedding[0].length;
+        const numDocs = docEmbeddings.length;
+
+        const firstDocLength = docEmbeddings[0].length;
+        const allSameLength = docEmbeddings.every(doc => doc.length === firstDocLength);
+
+        if (allSameLength) {
+            const totalSize = queryTokens * embeddingDim + numDocs * firstDocLength * embeddingDim;
+            const buffer = new Float32Array(totalSize);
+
+            let offset = 0;
+            for (let q = 0; q < queryTokens; q++) {
+                const token = queryEmbedding[q];
+                if (token instanceof Float32Array) {
+                    buffer.set(token, offset);
+                } else {
+                    for (let d = 0; d < embeddingDim; d++) {
+                        buffer[offset + d] = token[d];
+                    }
+                }
+                offset += embeddingDim;
+            }
+
+            for (let docIdx = 0; docIdx < numDocs; docIdx++) {
+                const doc = docEmbeddings[docIdx];
+                for (let tokenIdx = 0; tokenIdx < firstDocLength; tokenIdx++) {
+                    const token = doc[tokenIdx];
+                    if (token instanceof Float32Array) {
+                        buffer.set(token, offset);
+                    } else {
+                        for (let d = 0; d < embeddingDim; d++) {
+                            buffer[offset + d] = token[d];
+                        }
+                    }
+                    offset += embeddingDim;
+                }
+            }
+
+            const queryStart = 0;
+            const docStart = queryTokens * embeddingDim;
+
+            const scores = this.wasmInstance.maxsim_batch_uniform_normalized(
+                buffer.subarray(queryStart, docStart),
+                queryTokens,
+                buffer.subarray(docStart),
+                numDocs,
+                firstDocLength,
+                embeddingDim
+            );
+
+            return new Float32Array(scores);
+        } else {
+            const docTokenCounts = docEmbeddings.map(doc => doc.length);
+            const totalDocTokens = docTokenCounts.reduce((sum, count) => sum + count, 0);
+            const totalSize = queryTokens * embeddingDim + totalDocTokens * embeddingDim;
+
+            const buffer = new Float32Array(totalSize);
+
+            let offset = 0;
+            for (let q = 0; q < queryTokens; q++) {
+                const token = queryEmbedding[q];
+                if (token instanceof Float32Array) {
+                    buffer.set(token, offset);
+                } else {
+                    for (let d = 0; d < embeddingDim; d++) {
+                        buffer[offset + d] = token[d];
+                    }
+                }
+                offset += embeddingDim;
+            }
+
+            for (const doc of docEmbeddings) {
+                for (const token of doc) {
+                    if (token instanceof Float32Array) {
+                        buffer.set(token, offset);
+                    } else {
+                        for (let d = 0; d < embeddingDim; d++) {
+                            buffer[offset + d] = token[d];
+                        }
+                    }
+                    offset += embeddingDim;
+                }
+            }
+
+            const queryStart = 0;
+            const docStart = queryTokens * embeddingDim;
+
+            const scores = this.wasmInstance.maxsim_batch_normalized(
                 buffer.subarray(queryStart, docStart),
                 queryTokens,
                 buffer.subarray(docStart),
@@ -406,10 +557,10 @@ export class MaxSimWasm {
     getInfo() {
         return {
             name: 'MaxSim WASM',
-            version: '0.3.0',
+            version: '2.0.0',
             backend: 'wasm-simd',
-            features: ['simd', 'normalized-mode', 'batch-processing', 'zero-alloc-buffers'],
-            normalized: this.normalized,
+            features: ['simd', 'batch-processing', 'zero-alloc-buffers'],
+            methods: ['maxsim (official sum)', 'maxsim_normalized (averaged)'],
             initialized: this.isInitialized,
             bufferSize: this.docBuffer ? `${(this.docBuffer.length * 4 / 1024 / 1024).toFixed(1)}MB` : 'Not allocated',
             wasmInfo: this.isInitialized ? this.wasmInstance.get_info() : 'Not initialized'
