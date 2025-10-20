@@ -120,7 +120,7 @@ L2 normalize embeddings. Most modern embedding models output normalized embeddin
 |---------|----------------------|---------------------|
 | **Target** | General CPU (C++/Python) | JavaScript/WASM |
 | **Environment** | Server-side | Browser + Node.js |
-| **Performance** | Native CPU optimization | WASM+SIMD (7x faster) |
+| **Performance** | Native CPU optimization | WASM+SIMD |
 | **Use Case** | Production backends | Web apps, extensions |
 | **Dependencies** | System libraries | Zero dependencies |
 
