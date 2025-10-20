@@ -53,11 +53,10 @@ Progressive enhancement automatically selects the fastest available backend:
 
 | Backend | Speed | Compatibility | JIT Optimizations |
 |---------|-------|---------------|-------------------|
-| WASM+SIMD | ~11x faster* | Modern browsers | Native SIMD |
+| WASM+SIMD | ~7x faster* | Modern browsers | Native SIMD |
 | JS Optimized | ~1.25x faster** | All environments | Loop unrolling, JIT warmup |
 | JS Baseline | 1x | Universal | None |
 
-*Actual performance: 21,218 docs/s vs 1,871 docs/s baseline (11.3x speedup)
 **Performance varies by environment: 1.25x speedup in Node.js, minimal improvement in browsers due to different JIT strategies
 
 ## API
@@ -121,7 +120,7 @@ L2 normalize embeddings. Most modern embedding models output normalized embeddin
 |---------|----------------------|---------------------|
 | **Target** | General CPU (C++/Python) | JavaScript/WASM |
 | **Environment** | Server-side | Browser + Node.js |
-| **Performance** | Native CPU optimization | WASM+SIMD (11x faster) |
+| **Performance** | Native CPU optimization | WASM+SIMD (7x faster) |
 | **Use Case** | Production backends | Web apps, extensions |
 | **Dependencies** | System libraries | Zero dependencies |
 
@@ -187,22 +186,24 @@ These optimizations are inspired by the [fast-dotproduct](https://github.com/kyr
 
 ### Performance Summary
 
-**Large Scenario** - 100 docs × 512 tokens each (419,430,400 total operations)
+**Small Scenario** - 10 docs × 256 tokens each (10,485,760 total operations)
 
-| Implementation | Mean (ms) | Median (ms) | P95 (ms) | Throughput (docs/s) | Speedup | Optimizations |
-|----------------|-----------|-------------|----------|---------------------|---------|---------------|
-| JS Baseline    | 209.67    | 209.35      | 214.60   | 477                 | 1.00x   | None |
-| JS Optimized (JIT) | ~180-190* | ~180-185* | ~195*    | ~520-550*          | **1.1-1.5x*** | Loop unrolling + JIT warmup |
-| **WASM+SIMD**  | **16.08** | **15.65**   | **21.10**| **6,220**           | **13.04x** | Native SIMD |
+| Implementation | Mean (ms) | Median (ms) | P95 (ms) | Throughput (docs/s) | Speedup | Environment |
+|----------------|-----------|-------------|----------|---------------------|---------|-------------|
+| JS Baseline    | 4.91      | 4.83        | 5.47     | 2,035               | 1.00x   | Node.js |
+| JS Optimized   | 3.95      | 3.84        | 4.58     | 2,531               | **1.25x** | Node.js |
+| JS Optimized   | ~8.0*     | ~8.0*       | ~8.9*    | ~1,250*             | **~1.0x*** | Browser |
+| **WASM+SIMD**  | **0.96**  | **0.80**    | **1.90** | **10,417**          | **~8.2x** | Browser |
 
-*Realistic performance estimates with JIT optimizations - run `npm run benchmark` for actual results on your system
+*Browser results show minimal JS optimization gains due to different JIT strategies
 
 ### Key Insights
 
-- **WASM+SIMD delivers 13x speedup** over baseline JavaScript
-- **6,220 docs/s throughput** - suitable for real-time applications
-- **Consistent performance** with low P95 latency (21ms)
-- **Progressive enhancement** automatically selects fastest backend
+- **WASM+SIMD delivers 8x+ speedup** in browsers with excellent throughput (10,000+ docs/s)
+- **JS Optimized shows 1.25x speedup in Node.js** but minimal improvement in browsers
+- **Environment matters**: Node.js and browser JIT engines optimize differently
+- **Progressive enhancement** automatically selects fastest available backend
+- **For browsers**: Use WASM+SIMD for best performance; JS optimizations have limited impact
 
 ### Running Benchmarks
 
@@ -221,6 +222,3 @@ npm run benchmark small
 
 See [benchmark/README.md](benchmark/README.md) for detailed methodology and additional scenarios.
 
-## License
-
-MIT - Inspired by [mixedbread-ai/maxsim-cpu](https://github.com/mixedbread-ai/maxsim-cpu)
