@@ -516,7 +516,7 @@
                     <select id="scenario">
                         <optgroup label="Uniform Length">
                             <option value="tiny">Tiny (10 docs × 64 tokens)</option>
-                            <option value="small" selected>Small (10 docs × 256 tokens)</option>
+                            <option value="small">Small (10 docs × 256 tokens)</option>
                             <option value="medium">Medium (100 docs × 256 tokens)</option>
                             <option value="large">Large (100 docs × 512 tokens)</option>
                             <option value="realistic">Realistic (100 docs × 2000 tokens)</option>
@@ -524,7 +524,7 @@
                         </optgroup>
                         <optgroup label="Variable Length (Real World)">
                             <option value="variable-small">Variable Small (100 docs, 128-256 tokens)</option>
-                            <option value="variable-medium">Variable Medium (1000 docs, 128-512 tokens) ⭐</option>
+                            <option value="variable-medium" selected>Variable Medium (1000 docs, 128-512 tokens) ⭐</option>
                             <option value="variable-large">Variable Large (1000 docs, 200-400 tokens)</option>
                         </optgroup>
                     </select>
@@ -532,12 +532,12 @@
 
                 <div class="control-group">
                     <label for="warmup">Warmup Iterations</label>
-                    <input type="number" id="warmup" value="10" min="0" max="100">
+                    <input type="number" id="warmup" value="1" min="0" max="100">
                 </div>
 
                 <div class="control-group">
                     <label for="iterations">Benchmark Iterations</label>
-                    <input type="number" id="iterations" value="100" min="10" max="1000">
+                    <input type="number" id="iterations" value="1" min="1" max="1000">
                 </div>
 
                 <div class="control-group">
