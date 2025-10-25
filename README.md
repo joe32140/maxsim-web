@@ -101,11 +101,39 @@ maxsim.maxsimFlat_normalized(...)            // Normalized variant
 
 ## Key Features
 
-- ⚡ **Adaptive batching** - Optimizes for variable-length documents
+- ⚡ **Adaptive batching** - Automatically optimizes for variable-length documents (no config needed!)
 - 🎯 **Zero dependencies** - Lightweight installation
 - 🌐 **Universal** - Browser + Node.js
 - 📦 **Progressive** - Auto-selects fastest backend
 - 🔧 **TypeScript** - Full type definitions
+
+### How Adaptive Batching Works
+
+**Good news:** It's completely automatic! Just pass your documents normally.
+
+```javascript
+// Documents with different lengths? No problem!
+const docs = [
+    embedding1,  // 150 tokens
+    embedding2,  // 300 tokens
+    embedding3,  // 200 tokens
+    // ... any lengths
+];
+
+const scores = maxsim.maxsimBatch(query, docs);
+// ✅ WASM automatically:
+//    - Groups similar-length docs for efficiency
+//    - Reuses buffers (no repeated allocations)
+//    - Uses selective padding (only where needed)
+//    - Detects uniform lengths (skips padding entirely)
+```
+
+**When it helps:**
+- Mixed document lengths (typical in real-world search)
+- Large batches (100+ documents)
+- Variable query lengths
+
+**No configuration needed** - the optimization happens transparently based on your input!
 
 ## Use Cases
 
@@ -123,6 +151,23 @@ maxsim.maxsimFlat_normalized(...)            // Normalized variant
 - `maxsim_normalized()` - Averaged scores - for cross-query comparison
 
 Both produce identical rankings within a query, only absolute values differ.
+
+## FAQ
+
+**Q: Do I need to configure anything for variable-length documents?**
+A: No! Adaptive batching is automatic. Just pass your documents normally.
+
+**Q: What if all my documents are the same length?**
+A: Even better! The WASM detects this and uses a faster "uniform-length" code path (no padding needed).
+
+**Q: Do I need to sort documents by length?**
+A: No, the WASM does this internally for optimal performance.
+
+**Q: Does this work with both Standard and Flat API?**
+A: Yes! Both APIs use the same optimized WASM implementation.
+
+**Q: Can I disable adaptive batching?**
+A: No need to - it has zero overhead when not needed (uniform lengths) and only helps when needed (variable lengths).
 
 ## Documentation
 
