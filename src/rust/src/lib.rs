@@ -409,7 +409,7 @@ impl MaxSimWasm {
         self.similarity_buffer.borrow_mut().resize(sim_size, 0.0);
 
         // Compute similarities for ALL documents in ONE pass
-        // This enables SIMD vectorization across documents
+        // OPTIMIZATION: Manual unrolling to improve instruction-level parallelism
         {
             let mut similarities = self.similarity_buffer.borrow_mut();
 
@@ -417,12 +417,88 @@ impl MaxSimWasm {
             for q_idx in 0..query_tokens {
                 let query_token = &query_flat[q_idx * embedding_dim..(q_idx + 1) * embedding_dim];
 
-                // Process ALL documents for this query token together
-                for doc_idx in 0..batch_size {
+                // Process documents in groups of 4 for better ILP
+                let num_full_groups = batch_size / 4;
+
+                // Process 4 documents at a time (unrolled for ILP)
+                for group_idx in 0..num_full_groups {
+                    let base_doc_idx = group_idx * 4;
+
+                    // Get document info for all 4 docs
+                    let (_, len0, _) = doc_infos[batch_indices[base_doc_idx]];
+                    let (_, len1, _) = doc_infos[batch_indices[base_doc_idx + 1]];
+                    let (_, len2, _) = doc_infos[batch_indices[base_doc_idx + 2]];
+                    let (_, len3, _) = doc_infos[batch_indices[base_doc_idx + 3]];
+
+                    let start0 = base_doc_idx * max_doc_tokens * embedding_dim;
+                    let start1 = (base_doc_idx + 1) * max_doc_tokens * embedding_dim;
+                    let start2 = (base_doc_idx + 2) * max_doc_tokens * embedding_dim;
+                    let start3 = (base_doc_idx + 3) * max_doc_tokens * embedding_dim;
+
+                    let min_len = len0.min(len1).min(len2).min(len3);
+
+                    // Process common tokens for all 4 docs together (better ILP)
+                    for doc_tok_idx in 0..min_len {
+                        let tok_offset = doc_tok_idx * embedding_dim;
+
+                        // Compute 4 similarities - CPU can pipeline these!
+                        let sim0 = if normalized {
+                            dot_product(query_token, &batch_buffer[start0 + tok_offset..start0 + tok_offset + embedding_dim])
+                        } else {
+                            cosine_similarity(query_token, &batch_buffer[start0 + tok_offset..start0 + tok_offset + embedding_dim])
+                        };
+
+                        let sim1 = if normalized {
+                            dot_product(query_token, &batch_buffer[start1 + tok_offset..start1 + tok_offset + embedding_dim])
+                        } else {
+                            cosine_similarity(query_token, &batch_buffer[start1 + tok_offset..start1 + tok_offset + embedding_dim])
+                        };
+
+                        let sim2 = if normalized {
+                            dot_product(query_token, &batch_buffer[start2 + tok_offset..start2 + tok_offset + embedding_dim])
+                        } else {
+                            cosine_similarity(query_token, &batch_buffer[start2 + tok_offset..start2 + tok_offset + embedding_dim])
+                        };
+
+                        let sim3 = if normalized {
+                            dot_product(query_token, &batch_buffer[start3 + tok_offset..start3 + tok_offset + embedding_dim])
+                        } else {
+                            cosine_similarity(query_token, &batch_buffer[start3 + tok_offset..start3 + tok_offset + embedding_dim])
+                        };
+
+                        // Store all 4 results
+                        let base_sim_idx = q_idx * (batch_size * max_doc_tokens) + doc_tok_idx;
+                        similarities[base_sim_idx + base_doc_idx * max_doc_tokens] = sim0;
+                        similarities[base_sim_idx + (base_doc_idx + 1) * max_doc_tokens] = sim1;
+                        similarities[base_sim_idx + (base_doc_idx + 2) * max_doc_tokens] = sim2;
+                        similarities[base_sim_idx + (base_doc_idx + 3) * max_doc_tokens] = sim3;
+                    }
+
+                    // Handle remaining tokens for each doc individually
+                    for (offset, &(len, doc_idx)) in [(len0, base_doc_idx), (len1, base_doc_idx + 1),
+                                                        (len2, base_doc_idx + 2), (len3, base_doc_idx + 3)].iter().enumerate() {
+                        let start = (base_doc_idx + offset) * max_doc_tokens * embedding_dim;
+                        for doc_tok_idx in min_len..len {
+                            let tok_offset = doc_tok_idx * embedding_dim;
+                            let similarity = if normalized {
+                                dot_product(query_token, &batch_buffer[start + tok_offset..start + tok_offset + embedding_dim])
+                            } else {
+                                cosine_similarity(query_token, &batch_buffer[start + tok_offset..start + tok_offset + embedding_dim])
+                            };
+
+                            let sim_idx = q_idx * (batch_size * max_doc_tokens) +
+                                         doc_idx * max_doc_tokens +
+                                         doc_tok_idx;
+                            similarities[sim_idx] = similarity;
+                        }
+                    }
+                }
+
+                // Handle remainder documents (< 4)
+                for doc_idx in (num_full_groups * 4)..batch_size {
                     let (_, actual_doc_len, _) = doc_infos[batch_indices[doc_idx]];
                     let doc_start = doc_idx * max_doc_tokens * embedding_dim;
 
-                    // Only compute similarities for actual tokens (skip padding)
                     for doc_tok_idx in 0..actual_doc_len {
                         let doc_token_start = doc_start + doc_tok_idx * embedding_dim;
                         let doc_token = &batch_buffer[doc_token_start..doc_token_start + embedding_dim];
@@ -433,7 +509,6 @@ impl MaxSimWasm {
                             cosine_similarity(query_token, doc_token)
                         };
 
-                        // Store in similarity matrix: [q_idx][doc_idx][doc_tok_idx]
                         let sim_idx = q_idx * (batch_size * max_doc_tokens) +
                                      doc_idx * max_doc_tokens +
                                      doc_tok_idx;
