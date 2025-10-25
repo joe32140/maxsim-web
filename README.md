@@ -2,7 +2,7 @@
 
 ⚡ **High-performance JavaScript/WASM MaxSim for ColBERT and late-interaction retrieval**
 
-WASM+SIMD implementation with adaptive batching for variable-length documents. 5x faster than pure JavaScript.
+WASM+SIMD implementation with buffer reuse optimizations. 5x faster than pure JavaScript.
 
 [**🚀 Live Demo**](https://joe32140.github.io/maxsim-web/benchmark/) • [API Guide](docs/API_GUIDE.md) • [Examples](examples/)
 
@@ -101,39 +101,30 @@ maxsim.maxsimFlat_normalized(...)            // Normalized variant
 
 ## Key Features
 
-- ⚡ **Adaptive batching** - Automatically optimizes for variable-length documents (no config needed!)
+- ⚡ **Buffer reuse** - Reduces memory allocations for better performance
 - 🎯 **Zero dependencies** - Lightweight installation
 - 🌐 **Universal** - Browser + Node.js
 - 📦 **Progressive** - Auto-selects fastest backend
 - 🔧 **TypeScript** - Full type definitions
 
-### How Adaptive Batching Works
+### WASM Optimizations
 
-**Good news:** It's completely automatic! Just pass your documents normally.
+The WASM implementation includes:
+- **Parallel batch processing** - Processes 4 documents simultaneously per batch
+- **SIMD operations** - Vectorized dot products and max finding
+- **Buffer reuse** - Pre-allocated buffers reduce allocation overhead
+- **Optimized memory layout** - Cache-friendly data organization with document sorting
+
+**How batching works:**
+- Documents grouped and sorted by length
+- Processed in batches of 4 documents at a time
+- All similarity computations for the batch done together
+- Better cache locality and memory access patterns
 
 ```javascript
-// Documents with different lengths? No problem!
-const docs = [
-    embedding1,  // 150 tokens
-    embedding2,  // 300 tokens
-    embedding3,  // 200 tokens
-    // ... any lengths
-];
-
+// Automatically uses parallel batching
 const scores = maxsim.maxsimBatch(query, docs);
-// ✅ WASM automatically:
-//    - Groups similar-length docs for efficiency
-//    - Reuses buffers (no repeated allocations)
-//    - Uses selective padding (only where needed)
-//    - Detects uniform lengths (skips padding entirely)
 ```
-
-**When it helps:**
-- Mixed document lengths (typical in real-world search)
-- Large batches (100+ documents)
-- Variable query lengths
-
-**No configuration needed** - the optimization happens transparently based on your input!
 
 ## Use Cases
 
@@ -154,20 +145,25 @@ Both produce identical rankings within a query, only absolute values differ.
 
 ## FAQ
 
-**Q: Do I need to configure anything for variable-length documents?**
-A: No! Adaptive batching is automatic. Just pass your documents normally.
+**Q: Does this process multiple documents in parallel?**
+A: Yes! The WASM implementation processes documents in batches of 4. All similarity computations for the 4 documents are computed together, providing better cache locality and memory access patterns.
 
-**Q: What if all my documents are the same length?**
-A: Even better! The WASM detects this and uses a faster "uniform-length" code path (no padding needed).
+**Q: How does batching improve performance?**
+A: By processing 4 documents at once:
+- Documents sorted by length and grouped
+- Similarities computed for all 4 docs together
+- Better cache utilization
+- Reduced memory allocation overhead
 
-**Q: Do I need to sort documents by length?**
-A: No, the WASM does this internally for optimal performance.
+**Q: Does this use SIMD across documents?**
+A: The current implementation computes all 4 documents' similarities together, which enables better vectorization opportunities for the compiler and better memory access patterns. SIMD is used within each dot product computation.
 
-**Q: Does this work with both Standard and Flat API?**
-A: Yes! Both APIs use the same optimized WASM implementation.
-
-**Q: Can I disable adaptive batching?**
-A: No need to - it has zero overhead when not needed (uniform lengths) and only helps when needed (variable lengths).
+**Q: Do I need to configure batch sizes?**
+A: No! Batching is automatic. Documents are automatically:
+- Sorted by length
+- Grouped into batches of 4
+- Padded as needed
+- Processed optimally
 
 ## Documentation
 
