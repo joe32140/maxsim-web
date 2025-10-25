@@ -15,18 +15,29 @@
  */
 
 use wasm_bindgen::prelude::*;
+use std::cell::RefCell;
 
 #[cfg(target_arch = "wasm32")]
 use std::arch::wasm32::*;
 
 #[wasm_bindgen]
-pub struct MaxSimWasm {}
+pub struct MaxSimWasm {
+    // Reusable buffers to avoid repeated allocations
+    // These are hidden from JavaScript using #[wasm_bindgen(skip)]
+    #[wasm_bindgen(skip)]
+    similarity_buffer: RefCell<Vec<f32>>,
+    #[wasm_bindgen(skip)]
+    batch_buffer: RefCell<Vec<f32>>,
+}
 
 #[wasm_bindgen]
 impl MaxSimWasm {
     #[wasm_bindgen(constructor)]
     pub fn new() -> MaxSimWasm {
-        MaxSimWasm {}
+        MaxSimWasm {
+            similarity_buffer: RefCell::new(Vec::with_capacity(1024 * 128)), // Pre-allocate for common sizes
+            batch_buffer: RefCell::new(Vec::with_capacity(1024 * 1024)),
+        }
     }
 
     /// Official MaxSim: raw sum with dot product
@@ -67,36 +78,15 @@ impl MaxSimWasm {
         embedding_dim: usize,
         normalized: bool,
     ) -> f32 {
-        if query_tokens == 0 || doc_tokens == 0 {
-            return 0.0;
-        }
-
-        let mut similarities = vec![0.0f32; query_tokens * doc_tokens];
-
-        matrix_multiply(
+        // Use the optimized compute_maxsim_score which reuses buffers
+        self.compute_maxsim_score(
             query_flat,
-            doc_flat,
-            &mut similarities,
             query_tokens,
+            doc_flat,
             doc_tokens,
             embedding_dim,
             normalized,
-        );
-
-        let mut sum_max_sim = 0.0;
-        for q_idx in 0..query_tokens {
-            let row_start = q_idx * doc_tokens;
-            let row_end = row_start + doc_tokens;
-            sum_max_sim += simd_max(&similarities[row_start..row_end]);
-        }
-
-        // Official MaxSim = SUM (no averaging)
-        // Normalized MaxSim = SUM / query_tokens (for cross-query comparison)
-        if normalized {
-            sum_max_sim / query_tokens as f32
-        } else {
-            sum_max_sim
-        }
+        )
     }
 
     /// Official MaxSim batch: raw sum with cosine similarity
@@ -125,7 +115,7 @@ impl MaxSimWasm {
         self.maxsim_batch_impl(query_flat, query_tokens, doc_flat, doc_tokens, embedding_dim, true)
     }
 
-    // Internal implementation
+    // Internal implementation with optimized batching
     fn maxsim_batch_impl(
         &self,
         query_flat: &[f32],
@@ -136,26 +126,247 @@ impl MaxSimWasm {
         normalized: bool,
     ) -> Vec<f32> {
         let num_docs = doc_tokens.len();
+
+        if num_docs == 0 || query_tokens == 0 {
+            return vec![0.0; num_docs];
+        }
+
         let mut scores = vec![0.0; num_docs];
-        let mut doc_offset = 0;
 
-        for (doc_idx, &doc_token_count) in doc_tokens.iter().enumerate() {
-            let doc_end = doc_offset + doc_token_count * embedding_dim;
-            let doc_slice = &doc_flat[doc_offset..doc_end];
+        // Build document info: (original_index, length, offset)
+        let mut doc_infos: Vec<(usize, usize, usize)> = Vec::with_capacity(num_docs);
+        let mut offset = 0;
+        for (idx, &len) in doc_tokens.iter().enumerate() {
+            doc_infos.push((idx, len, offset));
+            offset += len * embedding_dim;
+        }
 
-            scores[doc_idx] = self.maxsim_single_impl(
+        // Sort by document length for better batching
+        let mut sorted_indices: Vec<usize> = (0..num_docs).collect();
+        sorted_indices.sort_by_key(|&i| doc_infos[i].1);
+
+        // Check if all documents have similar lengths (within 20% variance)
+        let min_len = doc_infos[sorted_indices[0]].1;
+        let max_len = doc_infos[sorted_indices[num_docs - 1]].1;
+        let length_variance = if min_len > 0 {
+            max_len as f32 / min_len as f32
+        } else {
+            f32::MAX
+        };
+
+        // Fast path: uniform-length documents (≤20% variance and ≥50 docs)
+        if length_variance <= 1.2 && num_docs >= 50 {
+            return self.maxsim_batch_uniform_length(
                 query_flat,
                 query_tokens,
-                doc_slice,
-                doc_token_count,
+                doc_flat,
+                &doc_infos,
+                &sorted_indices,
                 embedding_dim,
                 normalized,
             );
+        }
 
-            doc_offset = doc_end;
+        // Adaptive batching for variable-length documents
+        const LARGE_BATCH_SIZE: usize = 32;
+        const SMALL_BATCH_SIZE: usize = 16;
+
+        let batch_size = if num_docs >= LARGE_BATCH_SIZE {
+            LARGE_BATCH_SIZE
+        } else {
+            SMALL_BATCH_SIZE
+        };
+
+        // Process documents in batches
+        let mut i = 0;
+        while i < num_docs {
+            let batch_end = (i + batch_size).min(num_docs);
+
+            // Find max length in this batch
+            let batch_max_len = sorted_indices[i..batch_end]
+                .iter()
+                .map(|&idx| doc_infos[idx].1)
+                .max()
+                .unwrap_or(0);
+
+            if batch_max_len == 0 {
+                i = batch_end;
+                continue;
+            }
+
+            // Process batch with selective padding
+            self.process_variable_batch(
+                query_flat,
+                query_tokens,
+                doc_flat,
+                &doc_infos,
+                &sorted_indices[i..batch_end],
+                batch_max_len,
+                embedding_dim,
+                normalized,
+                &mut scores,
+            );
+
+            i = batch_end;
         }
 
         scores
+    }
+
+    // Fast path for uniform-length documents
+    fn maxsim_batch_uniform_length(
+        &self,
+        query_flat: &[f32],
+        query_tokens: usize,
+        doc_flat: &[f32],
+        doc_infos: &[(usize, usize, usize)],
+        sorted_indices: &[usize],
+        embedding_dim: usize,
+        normalized: bool,
+    ) -> Vec<f32> {
+        let num_docs = sorted_indices.len();
+        let mut scores = vec![0.0; doc_infos.len()];
+        let doc_len = doc_infos[sorted_indices[0]].1;
+
+        // Process all documents together without padding
+        let batch_size = 32;
+        for batch_start in (0..num_docs).step_by(batch_size) {
+            let batch_end = (batch_start + batch_size).min(num_docs);
+            let actual_batch_size = batch_end - batch_start;
+
+            self.batch_buffer.borrow_mut().resize(actual_batch_size * doc_len * embedding_dim, 0.0);
+
+            // Copy documents into batch buffer
+            {
+                let mut buffer = self.batch_buffer.borrow_mut();
+                for (batch_idx, &sorted_idx) in sorted_indices[batch_start..batch_end].iter().enumerate() {
+                    let (_, _, doc_offset) = doc_infos[sorted_idx];
+                    let src = &doc_flat[doc_offset..doc_offset + doc_len * embedding_dim];
+                    let dst_offset = batch_idx * doc_len * embedding_dim;
+                    buffer[dst_offset..dst_offset + src.len()].copy_from_slice(src);
+                }
+            }
+
+            // Process batch
+            let buffer = self.batch_buffer.borrow();
+            for (batch_idx, &sorted_idx) in sorted_indices[batch_start..batch_end].iter().enumerate() {
+                let (orig_idx, _, _) = doc_infos[sorted_idx];
+                let doc_start = batch_idx * doc_len * embedding_dim;
+                let doc_slice = &buffer[doc_start..doc_start + doc_len * embedding_dim];
+
+                scores[orig_idx] = self.compute_maxsim_score(
+                    query_flat,
+                    query_tokens,
+                    doc_slice,
+                    doc_len,
+                    embedding_dim,
+                    normalized,
+                );
+            }
+        }
+
+        scores
+    }
+
+    // Process a batch of variable-length documents with selective padding
+    fn process_variable_batch(
+        &self,
+        query_flat: &[f32],
+        query_tokens: usize,
+        doc_flat: &[f32],
+        doc_infos: &[(usize, usize, usize)],
+        batch_indices: &[usize],
+        max_len: usize,
+        embedding_dim: usize,
+        normalized: bool,
+        scores: &mut [f32],
+    ) {
+        let batch_size = batch_indices.len();
+        let required_size = batch_size * max_len * embedding_dim;
+
+        self.batch_buffer.borrow_mut().resize(required_size, 0.0);
+
+        // Copy documents with selective padding
+        {
+            let mut buffer = self.batch_buffer.borrow_mut();
+            buffer.fill(0.0); // Zero out for padding
+
+            for (batch_idx, &sorted_idx) in batch_indices.iter().enumerate() {
+                let (_, doc_len, doc_offset) = doc_infos[sorted_idx];
+                let src_size = doc_len * embedding_dim;
+                let dst_offset = batch_idx * max_len * embedding_dim;
+
+                // Copy document data
+                buffer[dst_offset..dst_offset + src_size]
+                    .copy_from_slice(&doc_flat[doc_offset..doc_offset + src_size]);
+
+                // Padding is already zero from fill(0.0)
+            }
+        }
+
+        // Compute scores for each document in batch
+        let buffer = self.batch_buffer.borrow();
+        for (batch_idx, &sorted_idx) in batch_indices.iter().enumerate() {
+            let (orig_idx, doc_len, _) = doc_infos[sorted_idx];
+            let doc_start = batch_idx * max_len * embedding_dim;
+            let doc_slice = &buffer[doc_start..doc_start + doc_len * embedding_dim];
+
+            scores[orig_idx] = self.compute_maxsim_score(
+                query_flat,
+                query_tokens,
+                doc_slice,
+                doc_len,
+                embedding_dim,
+                normalized,
+            );
+        }
+    }
+
+    // Optimized score computation with buffer reuse
+    fn compute_maxsim_score(
+        &self,
+        query_flat: &[f32],
+        query_tokens: usize,
+        doc_slice: &[f32],
+        doc_tokens: usize,
+        embedding_dim: usize,
+        normalized: bool,
+    ) -> f32 {
+        if query_tokens == 0 || doc_tokens == 0 {
+            return 0.0;
+        }
+
+        let sim_size = query_tokens * doc_tokens;
+        self.similarity_buffer.borrow_mut().resize(sim_size, 0.0);
+
+        // Compute similarities using shared buffer
+        {
+            let mut similarities = self.similarity_buffer.borrow_mut();
+            matrix_multiply(
+                query_flat,
+                doc_slice,
+                &mut similarities,
+                query_tokens,
+                doc_tokens,
+                embedding_dim,
+                normalized,
+            );
+        }
+
+        // Compute max-sim score
+        let similarities = self.similarity_buffer.borrow();
+        let mut sum_max_sim = 0.0;
+        for q_idx in 0..query_tokens {
+            let row_start = q_idx * doc_tokens;
+            let row_end = row_start + doc_tokens;
+            sum_max_sim += simd_max(&similarities[row_start..row_end]);
+        }
+
+        if normalized {
+            sum_max_sim / query_tokens as f32
+        } else {
+            sum_max_sim
+        }
     }
 
     /// Official MaxSim batch uniform: raw sum with cosine similarity
@@ -338,7 +549,7 @@ impl MaxSimWasm {
     #[wasm_bindgen]
     pub fn get_info(&self) -> String {
         format!(
-            "MaxSim WASM v0.5.0 (SIMD: {}, adaptive_blocking: true, methods: maxsim + maxsim_normalized)",
+            "MaxSim WASM v0.5.0 (SIMD: {}, adaptive_batching: true, buffer_reuse: true, methods: maxsim + maxsim_normalized)",
             cfg!(target_feature = "simd128")
         )
     }

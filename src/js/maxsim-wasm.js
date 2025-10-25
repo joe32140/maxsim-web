@@ -555,19 +555,177 @@ export class MaxSimWasm {
     }
 
     /**
+     * FLAT API - Zero-Copy Batch Processing
+     *
+     * Use this when your embeddings are already in flat Float32Array format.
+     * This eliminates all conversion overhead (up to 300ms saved for large batches).
+     *
+     * @param {Float32Array} queryFlat - Flat query embeddings (queryTokens × embeddingDim)
+     * @param {number} queryTokens - Number of query tokens
+     * @param {Float32Array} docsFlat - Flat concatenated document embeddings
+     * @param {Uint32Array|number[]} docTokenCounts - Number of tokens per document
+     * @param {number} embeddingDim - Embedding dimension
+     * @returns {Float32Array} Array of MaxSim scores
+     *
+     * @example
+     * // Embeddings already flat from ML library
+     * const queryFlat = new Float32Array(13 * 48);  // 13 tokens × 48 dim
+     * const docsFlat = new Float32Array(270000);     // All docs concatenated
+     * const docTokenCounts = new Uint32Array([256, 270, 245, ...]); // 1000 docs
+     *
+     * const scores = maxsim.maxsimBatchFlat(
+     *     queryFlat, 13, docsFlat, docTokenCounts, 48
+     * );
+     */
+    maxsimBatchFlat(queryFlat, queryTokens, docsFlat, docTokenCounts, embeddingDim) {
+        if (!this.isInitialized) {
+            throw new Error('WASM not initialized. Call init() first.');
+        }
+
+        // Validate inputs
+        const expectedQuerySize = queryTokens * embeddingDim;
+        if (queryFlat.length !== expectedQuerySize) {
+            throw new Error(
+                `Query size mismatch: expected ${expectedQuerySize} (${queryTokens} × ${embeddingDim}), ` +
+                `got ${queryFlat.length}`
+            );
+        }
+
+        const docTokenCountsArray = docTokenCounts instanceof Uint32Array ?
+            docTokenCounts : new Uint32Array(docTokenCounts);
+
+        const numDocs = docTokenCountsArray.length;
+
+        if (numDocs === 0) {
+            return new Float32Array(0);
+        }
+
+        // Direct WASM call - NO conversion overhead!
+        const scores = this.wasmInstance.maxsim_batch(
+            queryFlat,
+            queryTokens,
+            docsFlat,
+            docTokenCountsArray,
+            embeddingDim
+        );
+
+        return new Float32Array(scores);
+    }
+
+    /**
+     * FLAT API - Normalized MaxSim Batch
+     *
+     * Same as maxsimBatchFlat but returns normalized (averaged) scores.
+     *
+     * @param {Float32Array} queryFlat - Flat query embeddings
+     * @param {number} queryTokens - Number of query tokens
+     * @param {Float32Array} docsFlat - Flat concatenated document embeddings
+     * @param {Uint32Array|number[]} docTokenCounts - Number of tokens per document
+     * @param {number} embeddingDim - Embedding dimension
+     * @returns {Float32Array} Array of normalized MaxSim scores
+     */
+    maxsimBatchFlat_normalized(queryFlat, queryTokens, docsFlat, docTokenCounts, embeddingDim) {
+        if (!this.isInitialized) {
+            throw new Error('WASM not initialized. Call init() first.');
+        }
+
+        const expectedQuerySize = queryTokens * embeddingDim;
+        if (queryFlat.length !== expectedQuerySize) {
+            throw new Error(
+                `Query size mismatch: expected ${expectedQuerySize}, got ${queryFlat.length}`
+            );
+        }
+
+        const docTokenCountsArray = docTokenCounts instanceof Uint32Array ?
+            docTokenCounts : new Uint32Array(docTokenCounts);
+
+        if (docTokenCountsArray.length === 0) {
+            return new Float32Array(0);
+        }
+
+        const scores = this.wasmInstance.maxsim_batch_normalized(
+            queryFlat,
+            queryTokens,
+            docsFlat,
+            docTokenCountsArray,
+            embeddingDim
+        );
+
+        return new Float32Array(scores);
+    }
+
+    /**
+     * FLAT API - Single Document MaxSim
+     *
+     * Compute MaxSim for a single query-document pair using flat arrays.
+     *
+     * @param {Float32Array} queryFlat - Flat query embeddings
+     * @param {number} queryTokens - Number of query tokens
+     * @param {Float32Array} docFlat - Flat document embeddings
+     * @param {number} docTokens - Number of document tokens
+     * @param {number} embeddingDim - Embedding dimension
+     * @returns {number} MaxSim score
+     */
+    maxsimFlat(queryFlat, queryTokens, docFlat, docTokens, embeddingDim) {
+        if (!this.isInitialized) {
+            throw new Error('WASM not initialized. Call init() first.');
+        }
+
+        return this.wasmInstance.maxsim_single(
+            queryFlat,
+            queryTokens,
+            docFlat,
+            docTokens,
+            embeddingDim
+        );
+    }
+
+    /**
+     * FLAT API - Single Document Normalized MaxSim
+     *
+     * @param {Float32Array} queryFlat - Flat query embeddings
+     * @param {number} queryTokens - Number of query tokens
+     * @param {Float32Array} docFlat - Flat document embeddings
+     * @param {number} docTokens - Number of document tokens
+     * @param {number} embeddingDim - Embedding dimension
+     * @returns {number} Normalized MaxSim score
+     */
+    maxsimFlat_normalized(queryFlat, queryTokens, docFlat, docTokens, embeddingDim) {
+        if (!this.isInitialized) {
+            throw new Error('WASM not initialized. Call init() first.');
+        }
+
+        return this.wasmInstance.maxsim_single_normalized(
+            queryFlat,
+            queryTokens,
+            docFlat,
+            docTokens,
+            embeddingDim
+        );
+    }
+
+    /**
      * Get implementation info
      * @returns {object} Implementation details
      */
     getInfo() {
         return {
             name: 'MaxSim WASM',
-            version: '2.0.0',
+            version: '2.1.0',
             backend: 'wasm-simd',
-            features: ['simd', 'batch-processing', 'zero-alloc-buffers'],
-            methods: ['maxsim (official sum)', 'maxsim_normalized (averaged)'],
+            features: ['simd', 'batch-processing', 'zero-alloc-buffers', 'adaptive-batching', 'flat-api'],
+            methods: [
+                'maxsim() - 2D array API (convenience)',
+                'maxsimFlat() - Flat array API (performance)',
+                'maxsimBatch() - 2D array batch',
+                'maxsimBatchFlat() - Flat array batch (FASTEST)',
+                'maxsim_normalized() - Averaged scores',
+                'maxsimBatchFlat_normalized() - Flat batch normalized'
+            ],
             initialized: this.isInitialized,
             bufferSize: this.docBuffer ? `${(this.docBuffer.length * 4 / 1024 / 1024).toFixed(1)}MB` : 'Not allocated',
-            wasmInfo: this.isInitialized ? this.wasmInstance.get_info() : 'Not initialized'
+            wasmInfo: this.isInitialized ? this.wasmInstance.get_info() : 'Not initialized',
+            recommendation: 'Use *Flat() methods for best performance when data is already in Float32Array format'
         };
     }
 

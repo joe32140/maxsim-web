@@ -506,16 +506,27 @@
                 <strong>📊 Performance Note:</strong> JS Optimized shows 1.25x speedup in Node.js but minimal improvement in browsers due to different JIT optimization strategies. For best browser performance, use WASM+SIMD.
             </div>
 
+            <div class="status info">
+                <strong>🎯 Variable-Length Testing:</strong> The new variable-length scenarios test real-world conditions where documents have different lengths. This showcases the adaptive batching optimizations in WASM that provide 5-10x improvements over naive implementations.
+            </div>
+
             <div class="controls">
                 <div class="control-group">
                     <label for="scenario">Scenario</label>
                     <select id="scenario">
-                        <option value="tiny">Tiny (10 docs × 64 tokens)</option>
-                        <option value="small" selected>Small (10 docs × 256 tokens)</option>
-                        <option value="medium">Medium (100 docs × 256 tokens)</option>
-                        <option value="large">Large (100 docs × 512 tokens)</option>
-                        <option value="realistic">Realistic (100 docs × 2000 tokens)</option>
-                        <option value="xl">XL (1000 docs × 512 tokens)</option>
+                        <optgroup label="Uniform Length">
+                            <option value="tiny">Tiny (10 docs × 64 tokens)</option>
+                            <option value="small" selected>Small (10 docs × 256 tokens)</option>
+                            <option value="medium">Medium (100 docs × 256 tokens)</option>
+                            <option value="large">Large (100 docs × 512 tokens)</option>
+                            <option value="realistic">Realistic (100 docs × 2000 tokens)</option>
+                            <option value="xl">XL (1000 docs × 512 tokens)</option>
+                        </optgroup>
+                        <optgroup label="Variable Length (Real World)">
+                            <option value="variable-small">Variable Small (100 docs, 128-256 tokens)</option>
+                            <option value="variable-medium">Variable Medium (1000 docs, 128-512 tokens) ⭐</option>
+                            <option value="variable-large">Variable Large (1000 docs, 200-400 tokens)</option>
+                        </optgroup>
                     </select>
                 </div>
 
@@ -739,7 +750,11 @@
 
             log(`Starting benchmark: ${effectiveScenario.name}`);
             log(`Query: ${effectiveScenario.queryTokens} tokens × ${effectiveScenario.dim} dims`);
-            log(`Docs: ${effectiveScenario.numDocs} docs × ${effectiveScenario.docTokens} tokens`);
+            if (effectiveScenario.variableLength) {
+                log(`Docs: ${effectiveScenario.numDocs} docs × ${effectiveScenario.minDocTokens}-${effectiveScenario.docTokens} tokens (VARIABLE)`);
+            } else {
+                log(`Docs: ${effectiveScenario.numDocs} docs × ${effectiveScenario.docTokens} tokens`);
+            }
             log(`🔧 Using embedding dimension: ${effectiveScenario.dim}`);
 
             setStatus(`Running ${effectiveScenario.name}...`, 'info');
@@ -794,9 +809,13 @@
         function displayResults(scenario, results) {
             const baseline = results[0]; // JS Baseline
 
+            let variableLengthBadge = scenario.variableLength ?
+                '<span style="background: #4caf50; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.85em; margin-left: 10px;">📊 VARIABLE LENGTH</span>' : '';
+
             let html = `
-                <h3>${scenario.name} - ${scenario.description}</h3>
+                <h3>${scenario.name} - ${scenario.description} ${variableLengthBadge}</h3>
                 <p><strong>Total Operations:</strong> ${calculateOperations(scenario).toLocaleString()}</p>
+                ${scenario.variableLength ? `<p><strong>Document Lengths:</strong> ${scenario.minDocTokens}-${scenario.maxDocTokens || scenario.docTokens} tokens</p>` : ''}
 
                 <div class="table-container">
                     <table>

@@ -47,10 +47,12 @@ export function randomEmbedding(numTokens, dim, normalized = false) {
  * Generate test fixtures for benchmarking
  * @param {object} config - Configuration
  * @param {number} config.queryTokens - Number of query tokens
- * @param {number} config.docTokens - Number of document tokens
+ * @param {number} config.docTokens - Number of document tokens (or max if variableLength)
  * @param {number} config.numDocs - Number of documents
  * @param {number} config.dim - Embedding dimension
  * @param {boolean} config.normalized - Whether to normalize embeddings
+ * @param {boolean} config.variableLength - Whether to use variable-length documents
+ * @param {number} config.minDocTokens - Minimum document tokens (for variable length)
  * @returns {object} Test fixtures
  */
 export function generateFixtures(config) {
@@ -59,14 +61,21 @@ export function generateFixtures(config) {
     docTokens,
     numDocs,
     dim,
-    normalized = false
+    normalized = false,
+    variableLength = false,
+    minDocTokens = Math.floor(docTokens * 0.5)
   } = config;
 
   const query = randomEmbedding(queryTokens, dim, normalized);
   const documents = new Array(numDocs);
 
   for (let i = 0; i < numDocs; i++) {
-    documents[i] = randomEmbedding(docTokens, dim, normalized);
+    let tokens = docTokens;
+    if (variableLength) {
+      // Generate random length between minDocTokens and docTokens
+      tokens = Math.floor(Math.random() * (docTokens - minDocTokens + 1)) + minDocTokens;
+    }
+    documents[i] = randomEmbedding(tokens, dim, normalized);
   }
 
   return { query, documents, config };
@@ -129,6 +138,39 @@ export const scenarios = {
     numDocs: 1000,
     dim: 128,
     normalized: false
+  },
+  'variable-small': {
+    name: 'Variable Small',
+    description: '100 docs, 128-256 tokens (variable)',
+    queryTokens: 32,
+    docTokens: 256,
+    minDocTokens: 128,
+    numDocs: 100,
+    dim: 128,
+    normalized: false,
+    variableLength: true
+  },
+  'variable-medium': {
+    name: 'Variable Medium',
+    description: '1000 docs, 128-512 tokens (variable) - REAL WORLD',
+    queryTokens: 13,
+    docTokens: 512,
+    minDocTokens: 128,
+    numDocs: 1000,
+    dim: 48,
+    normalized: false,
+    variableLength: true
+  },
+  'variable-large': {
+    name: 'Variable Large',
+    description: '1000 docs, 200-400 tokens (variable, low variance)',
+    queryTokens: 32,
+    docTokens: 400,
+    minDocTokens: 200,
+    numDocs: 1000,
+    dim: 128,
+    normalized: false,
+    variableLength: true
   }
 };
 

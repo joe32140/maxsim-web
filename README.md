@@ -1,8 +1,10 @@
 # maxsim-web
 
-⚡ **JavaScript/WASM MaxSim implementation for ColBERT and late-interaction retrieval**
+⚡ **High-performance JavaScript/WASM MaxSim for ColBERT and late-interaction retrieval**
 
-High-performance MaxSim computation optimized for JavaScript environments with progressive enhancement from pure JS to WASM+SIMD. The JavaScript counterpart to [mixedbread-ai/maxsim-cpu](https://github.com/mixedbread-ai/maxsim-cpu).
+WASM+SIMD implementation with adaptive batching for variable-length documents. 5x faster than pure JavaScript.
+
+[**🚀 Live Demo**](https://joe32140.github.io/maxsim-web/benchmark/) • [API Guide](docs/API_GUIDE.md) • [Examples](examples/)
 
 ## Installation
 
@@ -12,213 +14,134 @@ npm install maxsim-web
 
 ## Quick Start
 
+### Standard API (2D Arrays)
+
 ```javascript
 import { MaxSim } from 'maxsim-web';
 
-// Auto-selects best backend (WASM → JS optimized → baseline)
-const maxsim = await MaxSim.create();
+const maxsim = await MaxSim.create(); // Auto-selects best backend
 
-// IMPORTANT: All methods expect L2-normalized embeddings
-// Most modern models (ColBERT, BGE, E5) output normalized embeddings by default
-
-// Official MaxSim (raw sum) - matches ColBERT, pylate-rs, mixedbread-ai
+// Single document
 const score = maxsim.maxsim(queryEmbedding, docEmbedding);
 
-// Normalized MaxSim (averaged) - for cross-query comparison
-const normalizedScore = maxsim.maxsim_normalized(queryEmbedding, docEmbedding);
-
-// Batch scoring (optimized)
+// Batch processing
 const scores = maxsim.maxsimBatch(queryEmbedding, [doc1, doc2, doc3]);
-const normalizedScores = maxsim.maxsimBatch_normalized(queryEmbedding, [doc1, doc2, doc3]);
 ```
 
-## Use Cases
+### Flat API (High Performance) 🚀
 
-**Perfect for:**
-- 🌐 **Browser-based search** - Client-side semantic search
-- 🔌 **Chrome extensions** - Real-time document similarity
-- ⚡ **Node.js APIs** - Fast similarity scoring endpoints  
-- 📱 **Progressive web apps** - Offline-capable search
-- 🎯 **Prototyping** - Quick ColBERT integration testing
+**For large batches (100+ docs) or when embeddings are already flat:**
 
-## 🚀 Live Demo
+```javascript
+import { MaxSimWasm } from 'maxsim-web/wasm';
 
-**[Try the interactive benchmark →](https://joe32140.github.io/maxsim-web/benchmark/)**
+const maxsim = new MaxSimWasm();
+await maxsim.init();
 
-Test all implementations in your browser with real-time performance comparison, multiple scenarios, and realistic embedding generation.
+// Zero-copy batch processing - up to 16x faster!
+const scores = maxsim.maxsimBatchFlat(
+    queryFlat,                      // Float32Array
+    queryTokens,                    // number
+    docsFlat,                       // Float32Array (all docs concatenated)
+    new Uint32Array(docTokenCounts), // tokens per doc
+    embeddingDim                    // number
+);
+```
+
+**Why use Flat API?**
+- ✅ Eliminates conversion overhead (~260ms for 1000 docs)
+- ✅ Direct WASM calls - no intermediate allocations
+- ✅ Perfect for embeddings from transformers.js, ONNX, etc.
+
+📖 **[Complete API Guide](docs/API_GUIDE.md)** | 💡 **[Performance Comparison](examples/api-comparison.js)**
 
 ## Performance
 
-Progressive enhancement automatically selects the fastest available backend:
+**Benchmark:** 100 docs, 128-256 tokens (variable length)
 
-| Backend | Speed | Compatibility | JIT Optimizations |
-|---------|-------|---------------|-------------------|
-| WASM+SIMD | ~7x faster* | Modern browsers | Native SIMD |
-| JS Optimized | ~1.25x faster** | All environments | Loop unrolling, JIT warmup |
-| JS Baseline | 1x | Universal | None |
+| Implementation | Time | Speedup vs Baseline |
+|----------------|------|---------------------|
+| **WASM+SIMD** | **11.8ms** | **5.2x faster** ⚡ |
+| JS Baseline | 61.0ms | 1.0x (baseline) |
+| JS Optimized | 61.8ms | ~1.0x (no improvement in browsers*) |
 
-**Performance varies by environment: 1.25x speedup in Node.js, minimal improvement in browsers due to different JIT strategies
+*JS Optimized shows 1.25x speedup in Node.js but not in browsers
 
-## API
+### Why Flat API Matters
 
-### `MaxSim.create(options)`
-Creates a MaxSim instance with automatic backend selection.
+When processing **1000 documents**:
+- **2D Array API:** ~320ms (61ms WASM + 260ms conversion overhead)
+- **Flat API:** ~61ms (zero conversion)
+- **Savings:** ~260ms (4.2x faster by avoiding conversions)
 
-- `backend`: `'auto'` \| `'wasm'` \| `'js-optimized'` \| `'js-baseline'` (default: `'auto'`)
+## API Reference
 
-### Two MaxSim Variants
+### Core Methods
 
-**⚠️ IMPORTANT**: Both methods expect **L2-normalized embeddings** as input. Modern embedding models (ColBERT, BGE, E5, etc.) output normalized embeddings by default. For normalized embeddings, dot product equals cosine similarity.
+```javascript
+// Standard (2D arrays)
+maxsim.maxsim(query, doc)                    // Single doc
+maxsim.maxsimBatch(query, docs)              // Batch
+maxsim.maxsim_normalized(query, doc)         // Normalized scores
 
-#### `maxsim.maxsim(query, doc)` - Official MaxSim
-**Formula:** `Σ max(qi · dj)` (raw sum)
-
-Matches the standard implementation used in:
-- ColBERT paper (2020)
-- pylate-rs (LightOn AI)
-- maxsim-cpu (mixedbread-ai)
-
-**Use when:**
-- You want to match the official ColBERT implementation
-- Ranking documents within a single query
-- Comparing to academic baselines
-
-**Returns:** Raw sum of maximum dot products (can be > 1)
-
-#### `maxsim.maxsim_normalized(query, doc)` - Normalized MaxSim
-**Formula:** `Σ max(qi · dj) / |query_tokens|` (averaged)
-
-Normalized variant for practical applications.
-
-**Use when:**
-- Comparing scores across different queries
-- Need bounded scores for threshold-based filtering
-- Cross-query result comparison
-
-**Returns:** Averaged score (typically between -1 and 1)
-
-**Note:** Both variants produce identical rankings within a single query. Normalization only affects the absolute score values.
-
-### Batch Processing
-
-#### `maxsim.maxsimBatch(query, docs)` - Official batch
-Batch compute official MaxSim scores (optimized for multiple documents).
-
-#### `maxsim.maxsimBatch_normalized(query, docs)` - Normalized batch
-Batch compute normalized MaxSim scores.
-
-### Utility Methods
-
-#### `MaxSim.normalize(embedding)`
-L2 normalize embeddings. Most modern embedding models output normalized embeddings by default, so you typically don't need this. Use only if your embeddings are not already normalized.
-
-## Why maxsim-web?
-
-**JavaScript/WASM-optimized** implementation of MaxSim computation, complementing the original [mixedbread-ai/maxsim-cpu](https://github.com/mixedbread-ai/maxsim-cpu):
-
-| Feature | maxsim-cpu (Original) | maxsim-web (This) |
-|---------|----------------------|---------------------|
-| **Target** | General CPU (C++/Python) | JavaScript/WASM |
-| **Environment** | Server-side | Browser + Node.js |
-| **Performance** | Native CPU optimization | WASM+SIMD |
-| **Use Case** | Production backends | Web apps, extensions |
-| **Dependencies** | System libraries | Zero dependencies |
-
-## Features
-
-- **Zero dependencies** - Lightweight and fast to install
-- **Universal compatibility** - Browser and Node.js
-- **Progressive enhancement** - Automatically uses fastest available backend
-- **JIT-optimized JavaScript** - 4-factor loop unrolling + compiler warmup
-- **TypeScript support** - Full type definitions included
-- **Web-optimized** - Built specifically for JavaScript environments
-
-## JIT Optimizations
-
-The JS Optimized backend includes several performance enhancements:
-
-- **4-factor loop unrolling**: Process 4 multiplications per iteration instead of 1
-- **JIT compiler warmup**: Pre-optimize hot code paths during initialization  
-- **Type consistency**: Optimized for Float32Array inputs
-- **Pattern matching**: Follows proven fast-dotproduct optimization techniques
-- **Reduced overhead**: 75% fewer loop iterations in dot product computation
-
-These optimizations are inspired by the [fast-dotproduct](https://github.com/kyr0/fast-dotproduct) library and deliver **25% performance improvements in Node.js**, though results vary significantly between JavaScript runtimes.
-
-**Performance by Environment:**
-- **Node.js**: 1.25x speedup (25% improvement) - JIT optimizations work well
-- **Browsers**: Minimal improvement (~1.0x) - Browser JIT strategies differ from Node.js
-- **Best performance**: Use WASM+SIMD in browsers for maximum speed gains
-
-**When JIT optimizations are most effective:**
-- Node.js environments (server-side processing)
-- Large embedding dimensions (256+ dimensions)  
-- High-frequency operations (batch processing)
-- Longer-running applications (JIT warmup benefits)
-
-## When to Use
-
-**Use maxsim-web when:**
-- Building web applications or browser extensions
-- Need client-side MaxSim computation
-- Want zero-dependency JavaScript solution
-- Targeting Node.js environments
-- Building real-time search interfaces
-
-**Use [maxsim-cpu](https://github.com/mixedbread-ai/maxsim-cpu) when:**
-- Building production backends
-- Need maximum CPU performance
-- Have access to native libraries
-- Running on dedicated servers
-
-## Related Projects
-
-- **[mixedbread-ai/maxsim-cpu](https://github.com/mixedbread-ai/maxsim-cpu)** - Original high-performance CPU implementation
-- **[ColBERT](https://github.com/stanford-futuredata/ColBERT)** - Late interaction retrieval model
-- **[sentence-transformers](https://github.com/UKPLab/sentence-transformers)** - Sentence embedding models
-
-## Benchmark Results
-
-### Test Environment
-- **CPU:** Intel Core i9-13900K (16 cores, 32 threads)
-- **Architecture:** x86_64 with AVX2, SIMD support
-- **Browser:** Modern browser with WASM+SIMD support
-
-### Performance Summary
-
-**Small Scenario** - 10 docs × 256 tokens each (10,485,760 total operations)
-
-| Implementation | Mean (ms) | Median (ms) | P95 (ms) | Throughput (docs/s) | Speedup | Environment |
-|----------------|-----------|-------------|----------|---------------------|---------|-------------|
-| JS Baseline    | 4.91      | 4.83        | 5.47     | 2,035               | 1.00x   | Node.js |
-| JS Optimized   | 3.95      | 3.84        | 4.58     | 2,531               | **1.25x** | Node.js |
-| JS Optimized   | ~8.0*     | ~8.0*       | ~8.9*    | ~1,250*             | **~1.0x*** | Browser |
-| **WASM+SIMD**  | **0.96**  | **0.80**    | **1.90** | **10,417**          | **~8.2x** | Browser |
-
-*Browser results show minimal JS optimization gains due to different JIT strategies
-
-### Key Insights
-
-- **WASM+SIMD delivers 8x+ speedup** in browsers with excellent throughput (10,000+ docs/s)
-- **JS Optimized shows 1.25x speedup in Node.js** but minimal improvement in browsers
-- **Environment matters**: Node.js and browser JIT engines optimize differently
-- **Progressive enhancement** automatically selects fastest available backend
-- **For browsers**: Use WASM+SIMD for best performance; JS optimizations have limited impact
-
-### Running Benchmarks
-
-#### Interactive Browser Benchmark
-```bash
-npm run benchmark:browser
-# Open http://localhost:8080/
+// Flat API (Float32Array - faster)
+maxsim.maxsimFlat(queryFlat, qTokens, docFlat, dTokens, dim)
+maxsim.maxsimBatchFlat(queryFlat, qTokens, docsFlat, tokenCounts, dim)
+maxsim.maxsimFlat_normalized(...)            // Normalized variant
 ```
-Test all implementations with real-time performance comparison and multiple scenarios.
 
-#### Node.js Benchmark
-```bash
-npm run benchmark small
-```
-**Note:** WASM only works in browsers. Node.js benchmarks test JavaScript implementations only.
+### When to Use Each
 
-See [benchmark/README.md](benchmark/README.md) for detailed methodology and additional scenarios.
+| Your Data | API | Why |
+|-----------|-----|-----|
+| From transformers.js | **Flat API** | Already flat - zero overhead |
+| 100+ documents | **Flat API** | Eliminates conversion time |
+| 2D arrays | Standard API | Convenient |
+| Small batches (<100) | Either | Similar performance |
 
+## Key Features
+
+- ⚡ **Adaptive batching** - Optimizes for variable-length documents
+- 🎯 **Zero dependencies** - Lightweight installation
+- 🌐 **Universal** - Browser + Node.js
+- 📦 **Progressive** - Auto-selects fastest backend
+- 🔧 **TypeScript** - Full type definitions
+
+## Use Cases
+
+- 🌐 **Browser search** - Client-side semantic retrieval
+- 🔌 **Extensions** - Real-time document similarity
+- ⚡ **Node.js APIs** - Fast similarity endpoints
+- 📱 **PWAs** - Offline-capable search
+
+## Important Notes
+
+**⚠️ Normalized embeddings required:** All methods expect L2-normalized embeddings. Modern models (ColBERT, BGE, E5) output normalized embeddings by default.
+
+**Two scoring variants:**
+- `maxsim()` - Official ColBERT (raw sum) - for ranking within single query
+- `maxsim_normalized()` - Averaged scores - for cross-query comparison
+
+Both produce identical rankings within a query, only absolute values differ.
+
+## Documentation
+
+- 📖 **[Complete API Guide](docs/API_GUIDE.md)** - Detailed usage, migration guide
+- 💡 **[API Comparison Example](examples/api-comparison.js)** - Performance demo
+- 📊 **[Benchmark Results](BENCHMARKS.md)** - Detailed performance measurements
+- 🎯 **[Performance Analysis](PERFORMANCE_ISSUE.md)** - Optimization deep-dive
+- 🧪 **[Interactive Benchmarks](benchmark/)** - Run benchmarks in your browser
+
+## Related
+
+- [mixedbread-ai/maxsim-cpu](https://github.com/mixedbread-ai/maxsim-cpu) - Original C++/Python implementation
+- [ColBERT](https://github.com/stanford-futuredata/ColBERT) - Late interaction retrieval
+- [sentence-transformers](https://github.com/UKPLab/sentence-transformers) - Embedding models
+
+## License
+
+MIT
+
+---
+
+**Quick tip:** Use Flat API to avoid conversion overhead (4x faster for large batches) and WASM+SIMD for computation (5x faster than JS). Combined effect for 1000 docs: ~5x total speedup!
