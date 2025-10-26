@@ -1,9 +1,9 @@
 [package]
 name = "maxsim_web_wasm"
-version = "0.3.0"
-authors = ["Joe"]
+version = "0.6.0"
+authors = ["Joe Hsu <joe32140@gmail.com>"]
 edition = "2021"
-description = "High-performance MaxSim scoring with WASM and SIMD"
+description = "High-performance MaxSim scoring with WASM and SIMD - 3-5x faster than JavaScript"
 license = "MIT"
 
 [lib]

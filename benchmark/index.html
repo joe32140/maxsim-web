@@ -536,6 +536,56 @@
             color: #999;
             margin-right: 10px;
         }
+
+        /* Preloaded benchmark styles */
+        .preload-info {
+            background: #e8f5e9;
+            padding: 10px;
+            border-left: 4px solid #4caf50;
+            margin: 8px 0;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .preload-info strong {
+            color: #2e7d32;
+        }
+
+        tr.preloaded {
+            background: #f1f8f4 !important;
+            border-left: 3px solid #4caf50;
+        }
+
+        tr.preloaded:hover {
+            background: #e8f5e9 !important;
+        }
+
+        .preload-badge {
+            background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+            color: white;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-left: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 4px rgba(76, 175, 80, 0.3);
+        }
+
+        .preload-metric {
+            display: inline-block;
+            background: #fff3e0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin: 2px 4px;
+            font-size: 12px;
+            border: 1px solid #ffb74d;
+        }
+
+        .preload-metric strong {
+            color: #f57c00;
+        }
     </style>
 </head>
 <body>
@@ -637,11 +687,14 @@
     </div>
 
     <script type="module">
-        import { MaxSimWasm } from '../src/js/maxsim-wasm.js';
+        import { MaxSimWasm } from './maxsim-wasm.js';
         import { MaxSimBaseline } from '../src/js/maxsim-baseline.js';
         import { MaxSimOptimized } from '../src/js/maxsim-optimized.js';
         import { scenarios, generateFixtures, calculateOperations } from './fixtures.js';
         import { generateRealisticDataset, compareEmbeddingTypes } from './realistic-embeddings.js';
+
+        // Enable debug logging to measure pure WASM time
+        window.__MAXSIM_DEBUG = true;
 
         // UI Elements
         const statusEl = document.getElementById('status');
@@ -787,6 +840,117 @@
             };
         }
 
+        // Benchmark preloaded implementation
+        async function benchmarkPreloaded(name, impl, fixtures, options) {
+            const { warmup = 10, iterations = 100 } = options;
+            const { query, documents } = fixtures;
+
+            log(`Benchmarking ${name} (PRELOADED)...`);
+
+            // Step 1: Load documents (one-time cost) - use FLAT API like fast-plaid!
+            setProgress(0, `${name}: Flattening documents...`);
+            const flattenStart = performance.now();
+
+            // Pre-flatten documents to avoid expensive conversion in loadDocuments
+            const embeddingDim = documents[0][0].length;
+            const docTokenCounts = new Uint32Array(documents.length);
+            let totalTokens = 0;
+            for (let i = 0; i < documents.length; i++) {
+                docTokenCounts[i] = documents[i].length;
+                totalTokens += documents[i].length;
+            }
+
+            const allEmbeddings = new Float32Array(totalTokens * embeddingDim);
+            let offset = 0;
+            for (let i = 0; i < documents.length; i++) {
+                const docEmb = documents[i];
+                for (let j = 0; j < docEmb.length; j++) {
+                    const token = docEmb[j];
+                    for (let d = 0; d < embeddingDim; d++) {
+                        allEmbeddings[offset + d] = token[d];
+                    }
+                    offset += embeddingDim;
+                }
+            }
+
+            const flattenTime = performance.now() - flattenStart;
+            log(`📊 Flattened ${documents.length} docs in ${flattenTime.toFixed(2)}ms`);
+
+            // Now load using FLAT API (fast!)
+            setProgress(5, `${name}: Loading documents...`);
+            const loadStart = performance.now();
+            await impl.loadDocuments(allEmbeddings, docTokenCounts, embeddingDim);
+            const loadTime = performance.now() - loadStart;
+            const numDocs = impl.numDocumentsLoaded();
+            log(`📦 Loaded ${numDocs} documents in ${loadTime.toFixed(2)}ms`);
+
+            // Step 2: Pre-flatten query for zero-overhead searches
+            setProgress(10, `${name}: Flattening query...`);
+            const queryTokens = query.length;
+            const queryFlat = new Float32Array(queryTokens * embeddingDim);
+            let idx = 0;
+            for (let token of query) {
+                for (let val of token) {
+                    queryFlat[idx++] = val;
+                }
+            }
+
+            // Step 3: Warmup with preloaded search (using flat API directly!)
+            setProgress(15, `${name}: Warming up preloaded search...`);
+            for (let i = 0; i < warmup; i++) {
+                impl.wasmInstance.search_preloaded(queryFlat, queryTokens);
+                if (i % 5 === 0) {
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+            }
+
+            // Step 4: Benchmark preloaded search (flat API = zero conversion overhead!)
+            setProgress(20, `${name}: Running benchmark...`);
+            const times = [];
+            for (let i = 0; i < iterations; i++) {
+                const start = performance.now();
+                const scores = impl.wasmInstance.search_preloaded(queryFlat, queryTokens);
+                const end = performance.now();
+                const iterTime = end - start;
+                times.push(iterTime);
+
+                // Log first iteration for detailed timing
+                if (i === 0 && window.__MAXSIM_DEBUG) {
+                    console.log(`[PRELOADED JS] First iteration pure WASM time: ${iterTime.toFixed(2)}ms`);
+                    console.log(`[PRELOADED JS] Query shape: ${queryTokens} tokens × ${embeddingDim} dim`);
+                    console.log(`[PRELOADED JS] Num docs loaded: ${impl.numDocumentsLoaded()}`);
+                }
+
+                if (i % 10 === 0) {
+                    const progress = 20 + Math.floor((i / iterations) * 80);
+                    setProgress(progress, `${name}: Iteration ${i}/${iterations}`);
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+            }
+
+            setProgress(100, `${name}: Complete!`);
+
+            const totalTime = times.reduce((sum, t) => sum + t, 0);
+            const throughput = (documents.length * iterations) / totalTime * 1000;
+
+            return {
+                name,
+                mean: mean(times),
+                median: median(times),
+                min: Math.min(...times),
+                max: Math.max(...times),
+                stdDev: stdDev(times),
+                p95: percentile(times, 95),
+                p99: percentile(times, 99),
+                throughput,
+                iterations,
+                loadTime: flattenTime + loadTime,  // Total one-time cost (flatten + load)
+                flattenTime,  // Track separately for analysis
+                wasmLoadTime: loadTime,  // Pure WASM load time
+                isPreloaded: true  // NEW: flag for display
+            };
+        }
+
         // Run single scenario
         async function runBenchmark(scenarioName, options = {}) {
             const scenario = scenarios[scenarioName];
@@ -834,6 +998,12 @@
             
             if (wasmImpl) {
                 implementations.push({ name: 'WASM+SIMD', impl: wasmImpl });
+                // Add preloaded benchmark (NEW v0.5.0!)
+                implementations.push({
+                    name: 'WASM+SIMD (Preloaded)',
+                    impl: wasmImpl,
+                    usePreloaded: true
+                });
                 setStatus(`Running ${scenario.name}...`, 'info');
             } else {
                 log('⚠️ WASM+SIMD unavailable - JS only');
@@ -843,8 +1013,13 @@
             const results = [];
 
             for (let i = 0; i < implementations.length; i++) {
-                const { name, impl } = implementations[i];
-                const result = await benchmarkImplementation(name, impl, fixtures, options);
+                const { name, impl, usePreloaded } = implementations[i];
+
+                // Use preloaded benchmark if flagged
+                const result = usePreloaded
+                    ? await benchmarkPreloaded(name, impl, fixtures, options)
+                    : await benchmarkImplementation(name, impl, fixtures, options);
+
                 results.push(result);
 
                 // Small delay to keep UI responsive
@@ -891,9 +1066,13 @@
                 const speedupClass = speedup >= 1.0 ? 'fast' : 'slow';
                 const arrow = speedup >= 1.0 ? '⬆️' : '⬇️';
 
+                // Add preload badge if this is a preloaded result
+                const badge = result.isPreloaded ? '<span class="preload-badge">⚡ Preloaded</span>' : '';
+                const rowClass = result.isPreloaded ? ' class="preloaded"' : '';
+
                 html += `
-                    <tr>
-                        <td><strong>${result.name}</strong></td>
+                    <tr${rowClass}>
+                        <td><strong>${result.name}${badge}</strong></td>
                         <td>${result.mean.toFixed(2)}</td>
                         <td>${result.median.toFixed(2)}</td>
                         <td>${result.p95.toFixed(2)}</td>
@@ -901,6 +1080,22 @@
                         <td><span class="speedup ${speedupClass}">${speedup.toFixed(2)}x ${arrow}</span></td>
                     </tr>
                 `;
+
+                // Add preload metrics row if applicable
+                if (result.isPreloaded) {
+                    const amortizedCost = (result.loadTime + result.mean * 100) / 100;
+                    html += `
+                        <tr${rowClass}>
+                            <td colspan="6" style="padding: 8px 15px;">
+                                <div class="preload-info">
+                                    <span class="preload-metric"><strong>Load Time (one-time):</strong> ${result.loadTime.toFixed(2)} ms</span>
+                                    <span class="preload-metric"><strong>Amortized (100 searches):</strong> ${amortizedCost.toFixed(2)} ms/search</span>
+                                    <span class="preload-metric"><strong>Speedup vs Non-Preloaded:</strong> ${(results[results.length - 2].mean / result.mean).toFixed(2)}x</span>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }
             }
 
             html += `

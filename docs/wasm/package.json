@@ -1,0 +1,20 @@
+{
+  "name": "maxsim_web_wasm",
+  "type": "module",
+  "collaborators": [
+    "Joe"
+  ],
+  "description": "High-performance MaxSim scoring with WASM and SIMD",
+  "version": "0.5.0",
+  "license": "MIT",
+  "files": [
+    "maxsim_web_wasm_bg.wasm",
+    "maxsim_web_wasm.js",
+    "maxsim_web_wasm.d.ts"
+  ],
+  "main": "maxsim_web_wasm.js",
+  "types": "maxsim_web_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

@@ -1,7 +1,7 @@
 {
   "name": "maxsim-web",
-  "version": "0.4.4",
-  "description": "JavaScript/WASM MaxSim implementation for ColBERT and late-interaction retrieval - Browser and Node.js optimized with WASM+SIMD",
+  "version": "0.6.0",
+  "description": "High-performance MaxSim scoring with WebAssembly and SIMD for ColBERT-style retrieval - 3-5x faster than JavaScript",
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -48,7 +48,7 @@
     "vector-search",
     "information-retrieval"
   ],
-  "author": "Joe Hsu (inspired by mixedbread-ai/maxsim-cpu)",
+  "author": "Joe Hsu <joe32140@gmail.com>",
   "license": "MIT",
   "repository": {
     "type": "git",
